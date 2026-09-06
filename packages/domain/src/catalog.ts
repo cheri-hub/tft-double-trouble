@@ -2,15 +2,14 @@ import type { CatalogEntry } from './types';
 
 // Snapshot: TFT Set 15 K.O. Coliseum (CommunityDragon 15.17, Aug 27 2025).
 // Source: https://raw.communitydragon.org/15.17/cdragon/tft/en_us.json (setData Set15).
-// IDs are stable and intentionally independent of display names. Component IDs are
+// Filtering rule: include Set15 source entries with apiName prefix TFT15_, cost 1-5,
+// and at least one trait (the source's playable-champion metadata). Component IDs are
 // the ten canonical basic components in that set; no synthesized aliases are used.
 export const CATALOG: readonly CatalogEntry[] = [
   { id: 'ahri', name: 'Ahri', category: 'champion', icon: 'ahri' },
   { id: 'garen', name: 'Garen', category: 'champion', icon: 'garen' },
   { id: 'jinx', name: 'Jinx', category: 'champion', icon: 'jinx' },
-  { id: 'kindred', name: 'Kindred', category: 'champion', icon: 'kindred' },
   { id: 'kobuko', name: 'Kobuko', category: 'champion', icon: 'kobuko' },
-  { id: 'lillia', name: 'Lillia', category: 'champion', icon: 'lillia' },
   { id: 'malphite', name: 'Malphite', category: 'champion', icon: 'malphite' },
   { id: 'shen', name: 'Shen', category: 'champion', icon: 'shen' },
   { id: 'viego', name: 'Viego', category: 'champion', icon: 'viego' },
@@ -71,7 +70,6 @@ export const CATALOG: readonly CatalogEntry[] = [
   { id: 'rammus', name: 'Rammus', category: 'champion', icon: 'rammus' },
   { id: 'zyra', name: 'Zyra', category: 'champion', icon: 'zyra' },
   { id: 'neeko', name: 'Neeko', category: 'champion', icon: 'neeko' },
-  { id: 'ekko', name: 'Ekko', category: 'champion', icon: 'ekko' },
   { id: 'bf-sword', name: 'B.F. Sword', category: 'component', icon: 'bf-sword' },
   { id: 'recurve-bow', name: 'Recurve Bow', category: 'component', icon: 'recurve-bow' },
   { id: 'needlessly-large-rod', name: 'Needlessly Large Rod', category: 'component', icon: 'needlessly-large-rod' },

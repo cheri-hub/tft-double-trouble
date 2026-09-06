@@ -16,8 +16,9 @@ describe('catalog', () => {
     ]));
   });
 
-  it('contains the complete 67-champion Set 15 snapshot roster', () => {
-    expect(CATALOG.filter((entry) => entry.category === 'champion')).toHaveLength(67);
-    expect(CATALOG.map((entry) => entry.id)).toEqual(expect.arrayContaining(['aatrox', 'ahri', 'ekko', 'zyra', 'zac']));
+  it('contains the exact 64-champion playable Set 15 snapshot roster', () => {
+    const expected = 'aatrox ahri akali ashe braum caitlyn darius dr-mundo ezreal gangplank garen gnar gwen janna jarvan-iv jayce jhin jinx kai-sa karma kalista katarina kayle kennen kobuko kog-maw ksante lee-sin leona lucian lulu lux malphite malzahar naafiri neeko poppy rakan rell rammus ryze samira senna seraphine sett shen sivir smolder swain syndra twisted-fate udyr varus vi viego volibear xayah xin-zhao yasuo yone yuumi zac zyra ziggs'.split(' ');
+    expect(CATALOG.filter((entry) => entry.category === 'champion')).toHaveLength(64);
+    expect(CATALOG.filter((entry) => entry.category === 'champion').map((entry) => entry.id).sort()).toEqual(expected.sort());
   });
 });
