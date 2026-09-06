@@ -61,8 +61,8 @@ describe('window settings', () => {
     expect(await loadWindowSettings()).toEqual({
       x: 24,
       y: 24,
-      width: 320,
-      height: 420,
+      width: 248,
+      height: 360,
       expanded: false,
     });
   });
@@ -71,7 +71,7 @@ describe('window settings', () => {
     expect(clampWindowSettings(
       { x: 50_000, y: -50_000, width: 20_000, height: 10, expanded: true },
       [{ x: 0, y: 0, width: 1920, height: 1080 }],
-    )).toEqual({ x: 24, y: 24, width: 1920, height: 420, expanded: true });
+    )).toEqual({ x: 24, y: 24, width: 1920, height: 120, expanded: true });
   });
 
   it('preserves negative coordinates when they intersect a secondary monitor', () => {
@@ -105,15 +105,8 @@ describe('window settings', () => {
 
   it('switches the current window into overlay mode and restores its bounds', async () => {
     let moved: ((event: { payload: { x: number; y: number } }) => void | Promise<void>) | undefined;
-    let resized:
-      | ((event: { payload: { width: number; height: number } }) => void | Promise<void>)
-      | undefined;
     appWindow.onMoved.mockImplementation(async (callback: typeof moved) => {
       moved = callback;
-      return () => undefined;
-    });
-    appWindow.onResized.mockImplementation(async (callback: typeof resized) => {
-      resized = callback;
       return () => undefined;
     });
     appWindow.scaleFactor.mockResolvedValue(2);
@@ -135,8 +128,8 @@ describe('window settings', () => {
 
     expect(appWindow.setDecorations).toHaveBeenCalledWith(false);
     expect(appWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
-    expect(appWindow.setResizable).toHaveBeenCalledWith(true);
-    expect(appWindow.setMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 320, height: 420 }));
+    expect(appWindow.setResizable).toHaveBeenCalledWith(false);
+    expect(appWindow.setMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 240, height: 120 }));
     expect(appWindow.setPosition).toHaveBeenCalledWith(expect.objectContaining({ x: 80, y: 48, unit: 'logical' }));
     expect(appWindow.setSize).toHaveBeenCalledWith(
       expect.objectContaining({ width: 640, height: 560, unit: 'logical' }),
@@ -147,26 +140,20 @@ describe('window settings', () => {
     expect(invoke).toHaveBeenCalledWith('save_window_settings', {
       settings: { x: 96, y: 72, width: 640, height: 560, expanded: true },
     });
-
-    invoke.mockClear();
-    await resized?.({ payload: { width: 1520, height: 1360 } });
-    expect(invoke).toHaveBeenCalledWith('save_window_settings', {
-      settings: { x: 96, y: 72, width: 760, height: 680, expanded: true },
-    });
   });
 
-  it('resizes the existing overlay and persists expansion state', async () => {
-    invoke.mockResolvedValue({ x: 24, y: 24, width: 320, height: 420, expanded: false });
+  it('changes only the width when toggling expansion and keeps the content-driven height', async () => {
+    invoke.mockResolvedValue({ x: 24, y: 24, width: 248, height: 300, expanded: false });
     await enterOverlayMode();
     invoke.mockClear();
 
     await setOverlayExpanded(true);
 
     expect(appWindow.setSize).toHaveBeenCalledWith(
-      expect.objectContaining({ width: 760, height: 680, unit: 'logical' }),
+      expect.objectContaining({ width: 460, height: 300, unit: 'logical' }),
     );
     expect(invoke).toHaveBeenCalledWith('save_window_settings', {
-      settings: { x: 24, y: 24, width: 760, height: 680, expanded: true },
+      settings: { x: 24, y: 24, width: 460, height: 300, expanded: true },
     });
   });
 });

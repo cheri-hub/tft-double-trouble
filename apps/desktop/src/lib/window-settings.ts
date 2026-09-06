@@ -17,18 +17,20 @@ export type WindowSettings = {
 export const DEFAULT_WINDOW_SETTINGS: WindowSettings = {
   x: 24,
   y: 24,
-  width: 320,
-  height: 420,
+  width: 248,
+  height: 360,
   expanded: false,
 };
 
-const EXPANDED_SIZE = { width: 760, height: 680 };
+const OVERLAY_WIDTH = { compact: 248, expanded: 460 } as const;
+const MIN_WINDOW_SIZE = { width: 240, height: 120 };
 const MAX_WINDOW_SIZE = { width: 1920, height: 1080 };
 
 type LogicalMonitorBounds = { x: number; y: number; width: number; height: number };
 
 let currentSettings: WindowSettings = { ...DEFAULT_WINDOW_SETTINGS };
 let listenersInstalled = false;
+let disposeContentObserver: (() => void) | null = null;
 
 export async function loadWindowSettings(): Promise<WindowSettings> {
   try {
@@ -44,8 +46,8 @@ export function clampWindowSettings(
   monitors: readonly LogicalMonitorBounds[] = [],
 ): WindowSettings {
   const limits = monitorLimits(monitors);
-  const width = clampFinite(settings.width, DEFAULT_WINDOW_SETTINGS.width, limits.width);
-  const height = clampFinite(settings.height, DEFAULT_WINDOW_SETTINGS.height, limits.height);
+  const width = clampFinite(settings.width, MIN_WINDOW_SIZE.width, limits.width);
+  const height = clampFinite(settings.height, MIN_WINDOW_SIZE.height, limits.height);
   const candidate = {
     x: finiteInteger(settings.x, DEFAULT_WINDOW_SETTINGS.x),
     y: finiteInteger(settings.y, DEFAULT_WINDOW_SETTINGS.y),
@@ -113,8 +115,9 @@ export async function enterOverlayMode(): Promise<boolean> {
   await Promise.all([
     appWindow.setDecorations(false),
     appWindow.setAlwaysOnTop(true),
-    appWindow.setResizable(true),
-    appWindow.setMinSize(new LogicalSize(DEFAULT_WINDOW_SETTINGS.width, DEFAULT_WINDOW_SETTINGS.height)),
+    // The overlay auto-sizes to its content, so manual resizing stays off.
+    appWindow.setResizable(false),
+    appWindow.setMinSize(new LogicalSize(MIN_WINDOW_SIZE.width, MIN_WINDOW_SIZE.height)),
     appWindow.setPosition(new LogicalPosition(currentSettings.x, currentSettings.y)),
     appWindow.setSize(new LogicalSize(currentSettings.width, currentSettings.height)),
   ]);
@@ -130,26 +133,56 @@ export async function enterOverlayMode(): Promise<boolean> {
       };
       await saveWindowSettings(currentSettings).catch(() => undefined);
     });
-    await appWindow.onResized(async ({ payload }) => {
-      const scaleFactor = await appWindow.scaleFactor();
-      currentSettings = {
-        ...currentSettings,
-        width: Math.round(payload.width / scaleFactor),
-        height: Math.round(payload.height / scaleFactor),
-      };
-      await saveWindowSettings(currentSettings).catch(() => undefined);
-    });
   }
 
   return currentSettings.expanded;
 }
 
-export async function setOverlayExpanded(expanded: boolean): Promise<void> {
-  const size = expanded
-    ? EXPANDED_SIZE
-    : { width: DEFAULT_WINDOW_SETTINGS.width, height: DEFAULT_WINDOW_SETTINGS.height };
-  currentSettings = { ...currentSettings, ...size, expanded };
+/**
+ * Keeps the native window height matched to the rendered overlay so no
+ * transparent, non-interactive area is left below the UI. Width is driven by
+ * the compact/expanded mode via {@link setOverlayExpanded}.
+ */
+export function watchOverlayContent(element: HTMLElement): () => void {
+  disposeContentObserver?.();
 
-  await getCurrentWindow().setSize(new LogicalSize(size.width, size.height));
+  let frame = 0;
+  const measure = () => {
+    frame = 0;
+    void applyContentHeight(Math.ceil(element.getBoundingClientRect().height));
+  };
+  const observer = new ResizeObserver(() => {
+    if (frame) return;
+    frame = requestAnimationFrame(measure);
+  });
+  observer.observe(element);
+
+  disposeContentObserver = () => {
+    if (frame) cancelAnimationFrame(frame);
+    observer.disconnect();
+    disposeContentObserver = null;
+  };
+  return disposeContentObserver;
+}
+
+async function applyContentHeight(height: number): Promise<void> {
+  if (!Number.isFinite(height) || height <= 0) return;
+  const clamped = clampWindowSettings({ ...currentSettings, height }, await monitorBounds());
+  if (clamped.height === currentSettings.height) return;
+
+  currentSettings = clamped;
+  try {
+    await getCurrentWindow().setSize(new LogicalSize(clamped.width, clamped.height));
+  } catch {
+    return;
+  }
+  await saveWindowSettings(currentSettings).catch(() => undefined);
+}
+
+export async function setOverlayExpanded(expanded: boolean): Promise<void> {
+  const width = expanded ? OVERLAY_WIDTH.expanded : OVERLAY_WIDTH.compact;
+  currentSettings = { ...currentSettings, width, expanded };
+
+  await getCurrentWindow().setSize(new LogicalSize(width, currentSettings.height));
   await saveWindowSettings(currentSettings);
 }

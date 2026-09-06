@@ -15,7 +15,7 @@
     "typecheck:e2e": "pnpm --filter desktop exec tsc -p ../../tsconfig.e2e.json"
   },
   "devDependencies": {
-    "@playwright/test": "1.55.0",
+    "@playwright/test": "^1.63.0",
     "@types/node": "22.20.1"
   }
 }

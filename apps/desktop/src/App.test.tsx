@@ -38,7 +38,11 @@ vi.mock('./stores/room-store', () => {
   return { useRoomStore };
 });
 
-vi.mock('./lib/window-settings', () => ({ enterOverlayMode, setOverlayExpanded }));
+vi.mock('./lib/window-settings', () => ({
+  enterOverlayMode,
+  setOverlayExpanded,
+  watchOverlayContent: () => () => undefined,
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();

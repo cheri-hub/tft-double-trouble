@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { CATALOG, type PriorityLists } from '../../../packages/domain/src';
 import { CompactOverlay } from './features/overlay/CompactOverlay';
 import { ExpandedOverlay } from './features/overlay/ExpandedOverlay';
 import { RoomCode } from './features/room/RoomCode';
 import { RoomEntry, type ConnectedRoom } from './features/room/RoomEntry';
-import { enterOverlayMode, setOverlayExpanded } from './lib/window-settings';
+import { enterOverlayMode, setOverlayExpanded, watchOverlayContent } from './lib/window-settings';
 import { useRoomStore } from './stores/room-store';
 
 export default function App() {
   const [connectedRoom, setConnectedRoom] = useState<ConnectedRoom | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const overlayStackRef = useRef<HTMLDivElement>(null);
   const connection = useRoomStore((state) => state.connection);
   const partnerPresence = useRoomStore((state) => state.partnerPresence);
   const saveStatus = useRoomStore((state) => state.saveStatus);
@@ -21,6 +22,11 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('overlay-active', connectedRoom !== null);
     return () => document.documentElement.classList.remove('overlay-active');
+  }, [connectedRoom]);
+
+  useEffect(() => {
+    if (!connectedRoom || !overlayStackRef.current) return;
+    return watchOverlayContent(overlayStackRef.current);
   }, [connectedRoom]);
 
   useEffect(() => {
@@ -54,11 +60,27 @@ export default function App() {
   };
 
   return (
-    <main data-testid="app-root" className={`app-shell${connectedRoom ? ' overlay-mode' : ''}`}>
+    <main
+      data-testid="app-root"
+      className={
+        connectedRoom
+          ? 'app-shell overlay-mode min-h-screen'
+          : 'app-shell grid min-h-screen place-content-center p-4'
+      }
+    >
       {connectedRoom ? (
-        <div className="overlay-stack">
-          <div className="overlay-drag-region" data-tauri-drag-region aria-label="Mover overlay">
-            <span>Double Trouble TFT</span>
+        <div
+          ref={overlayStackRef}
+          className="overlay-stack grid min-w-0 max-w-full content-start gap-1.5 [&>*]:min-w-0"
+        >
+          <div
+            className="overlay-drag-region flex min-h-[18px] cursor-grab items-center justify-between rounded-md bg-bg/70 px-2 backdrop-blur-md select-none"
+            data-tauri-drag-region
+            aria-label="Mover overlay"
+          >
+            <span className="pointer-events-none font-display text-[10px] font-semibold tracking-[0.18em] text-ink-dim uppercase">
+              Double Trouble TFT
+            </span>
           </div>
           <RoomCode roomId={connectedRoom.roomId} />
           {expanded ? (
