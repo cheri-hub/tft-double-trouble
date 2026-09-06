@@ -6,6 +6,10 @@
     linear-gradient(160deg, #12131a 0%, #1f2432 55%, #0f1218 100%);
 }
 
+:root.overlay-active {
+  background: transparent;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -17,6 +21,18 @@ body {
   min-height: 100vh;
   place-content: center;
   padding: 2rem;
+}
+
+.app-shell.overlay-mode {
+  place-content: stretch;
+  padding: 0;
+}
+
+.overlay-stack {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .room-entry,
@@ -116,6 +132,7 @@ button:hover:not(:disabled) {
 }
 
 .overlay {
+  box-sizing: border-box;
   width: min(920px, 100%);
   display: grid;
   gap: 1rem;

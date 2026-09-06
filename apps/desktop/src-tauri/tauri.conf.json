@@ -10,7 +10,21 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "Double Trouble TFT", "width": 1200, "height": 800 }],
+    "windows": [
+      {
+        "label": "main",
+        "title": "Double Trouble TFT",
+        "width": 720,
+        "height": 560,
+        "minWidth": 320,
+        "minHeight": 420,
+        "center": true,
+        "decorations": true,
+        "transparent": true,
+        "alwaysOnTop": false,
+        "resizable": true
+      }
+    ],
     "security": { "csp": null }
   },
   "bundle": { "active": true, "targets": "all" }
