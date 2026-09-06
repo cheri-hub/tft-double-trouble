@@ -19,6 +19,10 @@ export async function handleRequest(request: Request): Promise<Response> {
       p_now: new Date().toISOString(),
     });
     if (error) throw new Error(error.message);
+    const client = serviceClient();
+    const channel = client.channel(`room:${body.roomId}`);
+    await channel.send({ type: 'broadcast', event: 'presence_changed', payload: {} });
+    await client.removeChannel(channel);
     return json({ roomId: body.roomId, participantToken: credential.token });
   } catch (error) {
     return errorResponse(error);

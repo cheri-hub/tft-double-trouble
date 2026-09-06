@@ -37,6 +37,7 @@ vi.mock('@tauri-apps/api/window', () => ({
 }));
 
 import {
+  clampWindowSettings,
   enterOverlayMode,
   loadWindowSettings,
   saveWindowSettings,
@@ -62,6 +63,13 @@ describe('window settings', () => {
       height: 420,
       expanded: false,
     });
+  });
+
+  it('clamps malformed and off-screen persisted window bounds', () => {
+    expect(clampWindowSettings(
+      { x: 50_000, y: -50_000, width: 20_000, height: 10, expanded: true },
+      [{ x: 0, y: 0, width: 1920, height: 1080 }],
+    )).toEqual({ x: 24, y: 24, width: 1920, height: 420, expanded: true });
   });
 
   it('persists only window geometry and expansion state', async () => {

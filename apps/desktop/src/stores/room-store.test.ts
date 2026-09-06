@@ -14,14 +14,44 @@ afterEach(() => {
 });
 
 describe('room store', () => {
-  it('retains the last confirmed list when an update fails', async () => {
+  it('retains an unsaved draft and exposes a retryable error when an update fails', async () => {
     const store = makeRoomStore({ update: async () => { throw new Error('offline'); } });
 
     store.getState().setOwnLists({ champions: ['ahri'], components: [] });
 
     await expect(store.getState().saveOwnLists()).rejects.toThrow('offline');
     expect(store.getState().ownLists).toEqual(emptyLists);
-    expect(store.getState().draftOwnLists).toEqual(emptyLists);
+    expect(store.getState().draftOwnLists).toEqual({ champions: ['ahri'], components: [] });
+    expect(store.getState()).toMatchObject({ saveStatus: 'error', saveError: 'offline' });
+  });
+
+  it('serializes rapid saves so an older response cannot overwrite a newer edit', async () => {
+    const first = deferred<PriorityLists>();
+    const second = deferred<PriorityLists>();
+    const update = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+    const store = makeRoomStore({ update });
+
+    store.getState().connect('room-id', 'participant-token');
+    store.getState().setOwnLists({ champions: ['ahri'], components: [] });
+    const saving = store.getState().saveOwnLists();
+    store.getState().setOwnLists({ champions: ['akali'], components: [] });
+    void store.getState().saveOwnLists();
+
+    expect(update).toHaveBeenCalledTimes(1);
+    first.resolve({ champions: ['ahri'], components: [] });
+    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    expect(store.getState().draftOwnLists).toEqual({ champions: ['akali'], components: [] });
+
+    second.resolve({ champions: ['akali'], components: [] });
+    await saving;
+    expect(store.getState()).toMatchObject({
+      ownLists: { champions: ['akali'], components: [] },
+      draftOwnLists: { champions: ['akali'], components: [] },
+      saveStatus: 'saved',
+      saveError: null,
+    });
   });
 
   it('replaces the confirmed list only with the server response', async () => {
@@ -38,12 +68,14 @@ describe('room store', () => {
   it('tracks connection status and partner projections until disconnect', () => {
     let onLists: ((lists: PriorityLists) => void) | undefined;
     let onConnection: ((state: ConnectionState) => void) | undefined;
+    let onPresence: ((state: 'waiting' | 'online' | 'offline') => void) | undefined;
     const unsubscribe = vi.fn();
     const transport: RoomTransport = {
       update: async (_roomId, _token, lists) => lists,
-      subscribe: (_roomId, _token, listsChanged, connectionChanged) => {
+      subscribe: (_roomId, _token, listsChanged, connectionChanged, presenceChanged) => {
         onLists = listsChanged;
         onConnection = connectionChanged;
+        onPresence = presenceChanged;
         return unsubscribe;
       },
     };
@@ -53,10 +85,12 @@ describe('room store', () => {
     expect(store.getState().connection).toBe('connecting');
 
     onConnection?.('connected');
+    onPresence?.('online');
     onLists?.({ champions: ['ahri'], components: [] });
     expect(store.getState()).toMatchObject({
       roomId: 'room-id',
       connection: 'connected',
+      partnerPresence: 'online',
       partnerLists: { champions: ['ahri'], components: [] },
     });
 
@@ -111,7 +145,7 @@ describe('room store', () => {
 describe('Supabase list adapter', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('reconnects with bounded backoff and re-fetches confirmed partner state', async () => {
+  it('reconnects with capped backoff and re-fetches confirmed partner state', async () => {
     vi.useFakeTimers();
     const channels: FakeChannel[] = [];
     const realtime = {
@@ -122,15 +156,21 @@ describe('Supabase list adapter', () => {
       },
       removeChannel: vi.fn(async () => undefined),
     };
-    const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ lists: emptyLists }))
-      .mockResolvedValueOnce(jsonResponse({ lists: { champions: ['ahri'], components: [] } }));
+    const listResponses = [
+      { lists: emptyLists, partnerPresence: 'waiting' },
+      { lists: { champions: ['ahri'], components: [] }, partnerPresence: 'online' },
+    ];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/list-update')
+      ? jsonResponse(listResponses.shift())
+      : jsonResponse({ ok: true }));
     const adapter = createSupabaseListAdapter({
       functionsUrl: 'https://example.test/functions/v1',
       anonKey: 'anon-key',
       realtime,
       fetchImpl,
       backoffMs: [100, 200],
+      heartbeatMs: 60_000,
+      random: () => 0.5,
     });
     const connectionStates: ConnectionState[] = [];
     const changes: PriorityLists[] = [];
@@ -152,13 +192,13 @@ describe('Supabase list adapter', () => {
 
     expect(changes[changes.length - 1]).toEqual({ champions: ['ahri'], components: [] });
     expect(connectionStates[connectionStates.length - 1]).toBe('connected');
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).endsWith('/list-update'))).toHaveLength(2);
 
     unsubscribe();
     expect(realtime.removeChannel).toHaveBeenCalledTimes(2);
   });
 
-  it('goes offline after exhausting reconnect attempts', async () => {
+  it('keeps retrying indefinitely at the capped delay and reconnects immediately when online', async () => {
     vi.useFakeTimers();
     const channels: FakeChannel[] = [];
     const realtime = {
@@ -173,8 +213,13 @@ describe('Supabase list adapter', () => {
       functionsUrl: 'https://example.test/functions/v1',
       anonKey: 'anon-key',
       realtime,
-      fetchImpl: vi.fn().mockResolvedValue(jsonResponse({ lists: emptyLists })),
+      fetchImpl: vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/list-update')
+        ? jsonResponse({ lists: emptyLists, partnerPresence: 'waiting' })
+        : jsonResponse({ ok: true })),
       backoffMs: [10, 20],
+      heartbeatMs: 60_000,
+      random: () => 0.5,
+      eventTarget: window,
     });
     const states: ConnectionState[] = [];
 
@@ -184,11 +229,52 @@ describe('Supabase list adapter', () => {
     channels[1].emitStatus('TIMED_OUT');
     await vi.advanceTimersByTimeAsync(20);
     channels[2].emitStatus('CHANNEL_ERROR');
+    await vi.advanceTimersByTimeAsync(20);
 
-    expect(states[states.length - 1]).toBe('offline');
-    expect(channels).toHaveLength(3);
+    expect(states[states.length - 1]).toBe('reconnecting');
+    expect(channels).toHaveLength(4);
+
+    channels[3].emitStatus('CHANNEL_ERROR');
+    window.dispatchEvent(new Event('online'));
+    expect(channels).toHaveLength(5);
+  });
+
+  it('sends authenticated heartbeats and a best-effort leave while subscribed', async () => {
+    vi.useFakeTimers();
+    const channel = new FakeChannel();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/list-update')
+      ? jsonResponse({ lists: emptyLists, partnerPresence: 'offline' })
+      : jsonResponse({ ok: true }));
+    const adapter = createSupabaseListAdapter({
+      functionsUrl: 'https://example.test/functions/v1',
+      anonKey: 'anon-key',
+      realtime: { channel: () => channel, removeChannel: async () => undefined },
+      fetchImpl,
+      heartbeatMs: 1_000,
+      eventTarget: window,
+    });
+
+    const unsubscribe = adapter.subscribeToPartnerLists('room-id', 'participant-token', vi.fn());
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
+      'https://example.test/functions/v1/room-heartbeat',
+      expect.objectContaining({ body: JSON.stringify({ roomId: 'room-id', participantToken: 'participant-token' }) }),
+    ));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).endsWith('/room-heartbeat'))).toHaveLength(2);
+
+    unsubscribe();
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
+      'https://example.test/functions/v1/room-leave',
+      expect.objectContaining({ keepalive: true }),
+    ));
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => { resolve = settle; });
+  return { promise, resolve };
+}
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {

@@ -1,4 +1,4 @@
-import { CATALOG, validatePriorityLists, type PriorityLists } from '../../../packages/domain/src/index.ts';
+import { validatePriorityLists, type PriorityLists } from '../_shared/list-validation.ts';
 
 import { errorResponse, json, objectBody, options, serviceClient, tokenHash } from '../_shared/room-http.ts';
 
@@ -26,18 +26,21 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (body.action === 'get_partner') {
       const { data, error } = await client
         .from('participants')
-        .select('champion_list,component_list')
+        .select('champion_list,component_list,online')
         .eq('room_id', body.roomId)
         .neq('slot', participant.slot)
         .maybeSingle();
       if (error) throw new Error(error.message);
-      return json({ lists: data ? listsFromRow(data) : emptyLists() });
+      return json({
+        lists: data ? listsFromRow(data) : emptyLists(),
+        partnerPresence: data ? (data.online ? 'online' : 'offline') : 'waiting',
+      });
     }
 
     if (body.action !== 'update' || !isPriorityLists(body.lists)) {
       return json({ error: 'invalid_lists' }, 400);
     }
-    const validation = validatePriorityLists(body.lists, CATALOG);
+    const validation = validatePriorityLists(body.lists);
     if (!validation.ok) return json({ error: validation.code, index: validation.index }, 400);
 
     const confirmed = validation.value;
@@ -64,7 +67,7 @@ export async function handleRequest(request: Request): Promise<Response> {
 if (import.meta.main) Deno.serve(handleRequest);
 
 type ParticipantRow = { slot: 1 | 2 };
-type ListRow = { champion_list: unknown; component_list: unknown };
+type ListRow = { champion_list: unknown; component_list: unknown; online: boolean };
 type QueryClient = ReturnType<typeof serviceClient>;
 
 async function findParticipant(client: QueryClient, roomId: string, participantTokenHash: string): Promise<ParticipantRow | null> {

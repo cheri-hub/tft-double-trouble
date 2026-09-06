@@ -2,6 +2,7 @@ import { requireValidDate, systemClock, type Clock } from './clock';
 import { createParticipantToken, hashParticipantToken } from './participant-token';
 
 const ROOM_LIFETIME_MS = 15 * 60 * 1_000;
+const STALE_HEARTBEAT_MS = 60 * 1_000;
 
 export type RoomErrorCode =
   | 'room_not_found'
@@ -96,6 +97,15 @@ export class RoomService {
     let deleted = 0;
 
     for (const [roomId, room] of this.rooms) {
+      for (const participant of room.participants) {
+        if (participant.online && timestamp.getTime() - participant.lastSeenAt.getTime() >= STALE_HEARTBEAT_MS) {
+          participant.online = false;
+        }
+      }
+      if (room.participants.length > 0 && room.participants.every((participant) => !participant.online)) {
+        room.lastBothOfflineAt ??= timestamp;
+        room.expiresAt ??= new Date(timestamp.getTime() + ROOM_LIFETIME_MS);
+      }
       if (room.expiresAt && room.expiresAt.getTime() <= timestamp.getTime()) {
         this.rooms.delete(roomId);
         deleted += 1;

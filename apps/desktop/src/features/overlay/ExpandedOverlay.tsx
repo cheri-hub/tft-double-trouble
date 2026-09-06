@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import type { CatalogEntry, PriorityLists } from '../../../../../packages/domain/src';
+import type { SaveStatus } from '../../stores/room-store';
 
 import { CatalogPicker } from './CatalogPicker';
 import { PriorityList } from './PriorityList';
@@ -10,12 +11,23 @@ type ExpandedOverlayProps = {
   catalog: readonly CatalogEntry[];
   onSave: (lists: PriorityLists) => void;
   onCollapse: () => void;
+  saveStatus?: SaveStatus;
+  saveError?: string | null;
+  onRetry?: () => void;
 };
 
 function copyLists(lists: PriorityLists): PriorityLists {
   return { champions: [...lists.champions], components: [...lists.components] };
 }
-export function ExpandedOverlay({ ownLists, catalog, onSave, onCollapse }: ExpandedOverlayProps) {
+export function ExpandedOverlay({
+  ownLists,
+  catalog,
+  onSave,
+  onCollapse,
+  saveStatus = 'saved',
+  saveError = null,
+  onRetry = () => undefined,
+}: ExpandedOverlayProps) {
   const [draft, setDraft] = useState(() => copyLists(ownLists));
 
   useEffect(() => setDraft(copyLists(ownLists)), [ownLists]);
@@ -48,6 +60,17 @@ export function ExpandedOverlay({ ownLists, catalog, onSave, onCollapse }: Expan
         </div>
         <button type="button" onClick={onCollapse}>Recolher</button>
       </header>
+      <div className={`save-state save-${saveStatus}`} aria-live="polite">
+        {saveStatus === 'saving' && <p>Salvando alterações…</p>}
+        {saveStatus === 'unsaved' && <p>Alterações ainda não salvas.</p>}
+        {saveStatus === 'saved' && <p>Alterações salvas.</p>}
+        {saveStatus === 'error' && (
+          <div role="alert">
+            <p>Alterações não salvas. {friendlySaveError(saveError)}</p>
+            <button type="button" onClick={onRetry}>Tentar salvar novamente</button>
+          </div>
+        )}
+      </div>
       <div className="priority-grid">
         <div className="priority-editor">
           <PriorityList
@@ -74,4 +97,8 @@ export function ExpandedOverlay({ ownLists, catalog, onSave, onCollapse }: Expan
       </div>
     </section>
   );
+}
+
+function friendlySaveError(error: string | null): string {
+  return error === 'offline' ? 'Sem conexão com o servidor.' : 'Verifique a conexão e tente novamente.';
 }

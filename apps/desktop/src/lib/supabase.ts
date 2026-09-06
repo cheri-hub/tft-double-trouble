@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import type { PriorityLists } from '../../../../packages/domain/src';
 
-import type { ConnectionState, RoomTransport } from '../stores/room-store';
+import type { ConnectionState, PartnerPresence, RoomTransport } from '../stores/room-store';
 
 export interface RealtimeChannelLike {
   on(type: 'broadcast', filter: { event: string }, callback: () => void): this;
@@ -20,6 +20,9 @@ export type SupabaseListAdapterOptions = {
   realtime: RealtimeClientLike;
   fetchImpl?: typeof fetch;
   backoffMs?: readonly number[];
+  heartbeatMs?: number;
+  random?: () => number;
+  eventTarget?: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
 };
 
 export type SupabaseListAdapter = RoomTransport & {
@@ -29,16 +32,20 @@ export type SupabaseListAdapter = RoomTransport & {
     participantToken: string,
     onChange: (lists: PriorityLists) => void,
     onConnectionChange?: (state: ConnectionState) => void,
+    onPartnerPresenceChange?: (state: PartnerPresence) => void,
   ): () => void;
 };
 
 export function createSupabaseListAdapter(options: SupabaseListAdapterOptions): SupabaseListAdapter {
   const fetchImpl = options.fetchImpl ?? fetch;
   const backoffMs = options.backoffMs ?? [250, 500, 1_000, 2_000, 5_000];
-  const endpoint = `${options.functionsUrl.replace(/\/$/, '')}/list-update`;
+  const heartbeatMs = options.heartbeatMs ?? 20_000;
+  const random = options.random ?? Math.random;
+  const eventTarget = options.eventTarget ?? (typeof window === 'undefined' ? undefined : window);
+  const endpointBase = options.functionsUrl.replace(/\/$/, '');
 
-  const request = async (body: Record<string, unknown>): Promise<PriorityLists> => {
-    const response = await fetchImpl(endpoint, {
+  const post = async (path: string, body: Record<string, unknown>, keepalive = false): Promise<unknown> => {
+    const response = await fetchImpl(`${endpointBase}/${path}`, {
       method: 'POST',
       headers: {
         apikey: options.anonKey,
@@ -46,27 +53,42 @@ export function createSupabaseListAdapter(options: SupabaseListAdapterOptions): 
         'content-type': 'application/json',
       },
       body: JSON.stringify(body),
+      keepalive,
     });
     const payload: unknown = await response.json();
     if (!response.ok) throw new Error(readError(payload));
+    return payload;
+  };
+
+  const requestLists = async (body: Record<string, unknown>): Promise<PriorityLists> => {
+    const payload = await post('list-update', body);
     if (!isListsResponse(payload)) throw new Error('invalid_list_response');
     return copyLists(payload.lists);
   };
 
+  const requestPartner = async (roomId: string, participantToken: string): Promise<PartnerSnapshot> => {
+    const payload = await post('list-update', { action: 'get_partner', roomId, participantToken });
+    if (!isPartnerSnapshot(payload)) throw new Error('invalid_partner_response');
+    return { lists: copyLists(payload.lists), partnerPresence: payload.partnerPresence };
+  };
+
   const updateOwnLists = (roomId: string, participantToken: string, lists: PriorityLists) =>
-    request({ action: 'update', roomId, participantToken, lists });
+    requestLists({ action: 'update', roomId, participantToken, lists });
 
   const subscribeToPartnerLists: SupabaseListAdapter['subscribeToPartnerLists'] = (
     roomId,
     participantToken,
     onChange,
     onConnectionChange = () => undefined,
+    onPartnerPresenceChange = () => undefined,
   ) => {
     let channel: RealtimeChannelLike | null = null;
     let stopped = false;
     let retryIndex = 0;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let generation = 0;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let offline = false;
 
     const removeCurrentChannel = () => {
       if (!channel) return;
@@ -77,8 +99,11 @@ export function createSupabaseListAdapter(options: SupabaseListAdapterOptions): 
 
     const refresh = async (currentGeneration: number) => {
       try {
-        const lists = await request({ action: 'get_partner', roomId, participantToken });
-        if (!stopped && generation === currentGeneration) onChange(lists);
+        const snapshot = await requestPartner(roomId, participantToken);
+        if (!stopped && generation === currentGeneration) {
+          onChange(snapshot.lists);
+          onPartnerPresenceChange(snapshot.partnerPresence);
+        }
       } catch {
         if (!stopped && generation === currentGeneration) handleFailure(currentGeneration);
       }
@@ -87,15 +112,14 @@ export function createSupabaseListAdapter(options: SupabaseListAdapterOptions): 
     const handleFailure = (currentGeneration: number) => {
       if (stopped || generation !== currentGeneration || retryTimer) return;
       removeCurrentChannel();
-      if (retryIndex >= backoffMs.length) {
-        onConnectionChange('offline');
-        return;
-      }
       onConnectionChange('reconnecting');
-      const delay = backoffMs[retryIndex++];
+      const backoffIndex = Math.min(retryIndex, Math.max(0, backoffMs.length - 1));
+      const baseDelay = backoffMs[backoffIndex] ?? 5_000;
+      retryIndex += 1;
+      const delay = Math.max(0, Math.round(baseDelay * (0.8 + random() * 0.4)));
       retryTimer = setTimeout(() => {
         retryTimer = null;
-        connect();
+        if (!offline) connect();
       }, delay);
     };
 
@@ -106,6 +130,7 @@ export function createSupabaseListAdapter(options: SupabaseListAdapterOptions): 
       channel = options.realtime
         .channel(`room:${roomId}`)
         .on('broadcast', { event: 'list_changed' }, () => void refresh(currentGeneration))
+        .on('broadcast', { event: 'presence_changed' }, () => void refresh(currentGeneration))
         .subscribe((status) => {
           if (stopped || generation !== currentGeneration) return;
           if (status === 'SUBSCRIBED') {
@@ -118,13 +143,47 @@ export function createSupabaseListAdapter(options: SupabaseListAdapterOptions): 
         });
     };
 
+    const heartbeat = async (refreshAfter = true) => {
+      const currentGeneration = generation;
+      await post('room-heartbeat', { roomId, participantToken });
+      if (refreshAfter && !stopped && currentGeneration === generation) await refresh(currentGeneration);
+    };
+
+    const onOnline = () => {
+      if (stopped) return;
+      offline = false;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+      removeCurrentChannel();
+      onConnectionChange('reconnecting');
+      connect();
+      void heartbeat().catch(() => handleFailure(generation));
+    };
+
+    const onOffline = () => {
+      offline = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+      removeCurrentChannel();
+      onConnectionChange('offline');
+    };
+
     connect();
+    eventTarget?.addEventListener('online', onOnline);
+    eventTarget?.addEventListener('offline', onOffline);
+    void heartbeat(false).catch(() => handleFailure(generation));
+    heartbeatTimer = setInterval(() => void heartbeat().catch(() => handleFailure(generation)), heartbeatMs);
     return () => {
       stopped = true;
       generation += 1;
       if (retryTimer) clearTimeout(retryTimer);
       retryTimer = null;
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+      eventTarget?.removeEventListener('online', onOnline);
+      eventTarget?.removeEventListener('offline', onOffline);
       removeCurrentChannel();
+      void post('room-leave', { roomId, participantToken }, true).catch(() => undefined);
     };
   };
 
@@ -134,6 +193,14 @@ export function createSupabaseListAdapter(options: SupabaseListAdapterOptions): 
     update: updateOwnLists,
     subscribe: subscribeToPartnerLists,
   };
+}
+
+type PartnerSnapshot = { lists: PriorityLists; partnerPresence: PartnerPresence };
+
+function isPartnerSnapshot(value: unknown): value is PartnerSnapshot {
+  return isListsResponse(value)
+    && 'partnerPresence' in value
+    && (value.partnerPresence === 'waiting' || value.partnerPresence === 'online' || value.partnerPresence === 'offline');
 }
 
 export type SupabaseRoomClient = {

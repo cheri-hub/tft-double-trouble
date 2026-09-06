@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "pnpm --filter desktop dev",
     "build": "pnpm --filter desktop build",
-    "test": "pnpm --filter @double-trouble/domain vitest run && pnpm --filter @double-trouble/server vitest run && pnpm --filter desktop vitest run",
+    "test": "pnpm test:config && pnpm --filter @double-trouble/domain vitest run && pnpm --filter @double-trouble/server vitest run && pnpm --filter desktop vitest run",
+    "test:config": "node --test scripts/build-env.test.mjs",
+    "check:functions": "node scripts/check-functions.mjs",
+    "test:integration": "deno test --allow-env --allow-net tests/integration/supabase-contract.test.ts",
     "test:e2e": "playwright test",
     "typecheck:e2e": "pnpm --filter desktop exec tsc -p ../../tsconfig.e2e.json"
   },

@@ -61,7 +61,8 @@ export function CatalogPicker({ category, selectedIds, onAdd }: CatalogPickerPro
                 key={entry.id}
                 onClick={() => add(entry.id)}
               >
-                {entry.name}
+                <img className="catalog-icon" src={entry.icon} alt="" loading="lazy" />
+                <span>{entry.name}</span>
               </button>
             );
           })}

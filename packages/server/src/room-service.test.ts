@@ -87,4 +87,22 @@ describe('RoomService', () => {
 
     expect(await service.cleanupExpiredRooms(at('2026-09-06T12:16:00Z'))).toBe(1);
   });
+
+  it('marks crashed participants offline and starts expiry after stale heartbeats', async () => {
+    const first = await service.createRoom(at('2026-09-06T12:00:00Z'));
+    await service.joinRoom(first.roomId, at('2026-09-06T12:00:20Z'));
+
+    expect(await service.cleanupExpiredRooms(at('2026-09-06T12:01:20Z'))).toBe(0);
+    expect(await service.cleanupExpiredRooms(at('2026-09-06T12:16:19Z'))).toBe(0);
+    expect(await service.cleanupExpiredRooms(at('2026-09-06T12:16:20Z'))).toBe(1);
+  });
+
+  it('keeps a room alive while one participant continues heartbeating', async () => {
+    const first = await service.createRoom(at('2026-09-06T12:00:00Z'));
+    await service.joinRoom(first.roomId, at('2026-09-06T12:00:00Z'));
+    await service.heartbeat(first.roomId, first.participantToken, at('2026-09-06T12:01:10Z'));
+
+    expect(await service.cleanupExpiredRooms(at('2026-09-06T12:01:20Z'))).toBe(0);
+    expect(await service.cleanupExpiredRooms(at('2026-09-06T12:16:20Z'))).toBe(0);
+  });
 });

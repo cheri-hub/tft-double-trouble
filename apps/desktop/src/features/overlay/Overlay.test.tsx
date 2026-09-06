@@ -26,6 +26,7 @@ describe('overlay', () => {
       <CompactOverlay
         partnerLists={{ champions: ['ahri'], components: ['bf-sword'] }}
         connection="connected"
+        partnerPresence="online"
         onExpand={vi.fn()}
       />,
     );
@@ -47,6 +48,7 @@ describe('overlay', () => {
       <CompactOverlay
         partnerLists={{ champions: [], components: [] }}
         connection={connection}
+        partnerPresence="waiting"
         onExpand={vi.fn()}
       />,
     );
@@ -56,10 +58,26 @@ describe('overlay', () => {
 
   it('shows empty partner-list states without changing the supplied lists', () => {
     const partnerLists = { champions: [] as string[], components: [] as string[] };
-    render(<CompactOverlay partnerLists={partnerLists} connection="offline" onExpand={vi.fn()} />);
+    render(<CompactOverlay partnerLists={partnerLists} connection="offline" partnerPresence="offline" onExpand={vi.fn()} />);
 
     expect(screen.getAllByText('Nenhuma prioridade adicionada.')).toHaveLength(2);
     expect(partnerLists).toEqual({ champions: [], components: [] });
+  });
+
+  it.each([
+    ['waiting', 'Aguardando parceiro'],
+    ['offline', 'Parceiro offline — aguardando reconexão'],
+    ['online', 'Parceiro conectado'],
+  ] as const)('shows %s partner presence as %s', (partnerPresence, label) => {
+    render(
+      <CompactOverlay
+        partnerLists={{ champions: [], components: [] }}
+        connection="connected"
+        partnerPresence={partnerPresence}
+        onExpand={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(label)).toBeInTheDocument();
   });
 
   it('filters catalog options and never emits an already selected id', () => {
@@ -97,6 +115,25 @@ describe('overlay', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Remover Ahri' }));
     expect(onSave).toHaveBeenLastCalledWith({ champions: [], components: [] });
+  });
+
+  it('surfaces an unsaved list error and offers retry', () => {
+    const onRetry = vi.fn();
+    render(
+      <ExpandedOverlay
+        ownLists={{ champions: ['ahri'], components: [] }}
+        catalog={CATALOG}
+        onSave={vi.fn()}
+        onCollapse={vi.fn()}
+        saveStatus="error"
+        saveError="offline"
+        onRetry={onRetry}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Alterações não salvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar salvar novamente' }));
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 
   it('locks catalog add controls when the category already has ten entries', () => {

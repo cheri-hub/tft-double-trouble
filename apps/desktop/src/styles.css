@@ -192,6 +192,29 @@ button:hover:not(:disabled) {
 .connection-reconnecting { color: #ffcf78; }
 .connection-offline { color: #ff9f7a; }
 
+.partner-presence,
+.save-state p {
+  margin: 0;
+  color: #b7c0d4;
+  font-size: 0.86rem;
+}
+
+.partner-online { color: #86e6b3; }
+.partner-offline { color: #ffcf78; }
+
+.save-state > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(255, 104, 104, 0.12);
+}
+
+.save-error p { color: #ffb29a; }
+.save-state button { padding: 0.5rem 0.7rem; }
+
 .priority-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -247,6 +270,14 @@ button:hover:not(:disabled) {
   flex: 1;
 }
 
+.catalog-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
 .priority-actions {
   gap: 0.25rem;
 }
@@ -285,6 +316,9 @@ button:hover:not(:disabled) {
 }
 
 .catalog-options button {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   padding: 0.65rem 0.75rem;
   text-align: left;
 }

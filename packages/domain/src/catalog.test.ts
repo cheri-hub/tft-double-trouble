@@ -11,14 +11,18 @@ describe('catalog', () => {
 
   it('includes the known initial entries', () => {
     expect(CATALOG).toEqual(expect.arrayContaining([
-      { id: 'ahri', name: 'Ahri', category: 'champion', icon: 'ahri' },
-      { id: 'bf-sword', name: 'B.F. Sword', category: 'component', icon: 'bf-sword' },
+      { id: 'ahri', name: 'Ahri', category: 'champion', icon: '/catalog/champions/ahri.png' },
+      { id: 'bf-sword', name: 'B.F. Sword', category: 'component', icon: '/catalog/components/bf-sword.png' },
     ]));
   });
 
-  it('contains the exact 64-champion playable Set 15 snapshot roster', () => {
-    const expected = 'aatrox ahri akali ashe braum caitlyn darius dr-mundo ezreal gangplank garen gnar gwen janna jarvan-iv jayce jhin jinx kai-sa karma kalista katarina kayle kennen kobuko kog-maw ksante lee-sin leona lucian lulu lux malphite malzahar naafiri neeko poppy rakan rell rammus ryze samira senna seraphine sett shen sivir smolder swain syndra twisted-fate udyr varus vi viego volibear xayah xin-zhao yasuo yone yuumi zac zyra ziggs'.split(' ');
-    expect(CATALOG.filter((entry) => entry.category === 'champion')).toHaveLength(64);
+  it('contains the exact 65-unit playable Set 18 patch 16.17 snapshot roster', () => {
+    const expected = 'ahri akali alistar alune amumu aphelios ashe azir brambleback caitlyn camille cassiopeia cinderling diana draven elder-dragon elise ezreal fiddlesticks gnar gromp hecarim ivern karma kayle kennen kha-zix kobuko kog-maw krug leblanc leona lillia lux malphite mama-beak maokai master-yi morgana murkwolf nidalee ornn pebbles rakan rammus rek-sai rengar scuttlecrab sejuani sentinel sett shen sivir soraka taric teemo tristana varus veigar vi warwick xayah yorick yunara zyra'.split(' ');
+    expect(CATALOG.filter((entry) => entry.category === 'champion')).toHaveLength(65);
     expect(CATALOG.filter((entry) => entry.category === 'champion').map((entry) => entry.id).sort()).toEqual(expected.sort());
+  });
+
+  it('uses packaged image assets for every catalog entry', () => {
+    expect(CATALOG.every((entry) => entry.icon.startsWith('/catalog/') && entry.icon.endsWith('.png'))).toBe(true);
   });
 });

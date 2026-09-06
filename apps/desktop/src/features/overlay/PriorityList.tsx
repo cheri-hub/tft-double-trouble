@@ -31,12 +31,13 @@ type SortableEntryProps = {
   id: string;
   index: number;
   name: string;
+  icon: string;
   ids: string[];
   onRemove?: (id: string) => void;
   onReorder?: (ids: string[]) => void;
 };
 
-function SortableEntry({ id, index, name, ids, onRemove, onReorder }: SortableEntryProps) {
+function SortableEntry({ id, index, name, icon, ids, onRemove, onReorder }: SortableEntryProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
@@ -58,6 +59,7 @@ function SortableEntry({ id, index, name, ids, onRemove, onReorder }: SortableEn
       >
         <span aria-hidden="true">⋮⋮</span>
       </button>
+      <img className="catalog-icon" src={icon} alt="" loading="lazy" />
       <span className="priority-name">{index + 1}. {name}</span>
       <span className="priority-actions">
         <button
@@ -88,7 +90,7 @@ export function PriorityList({ title, ids, catalog, editable, onRemove, onReorde
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const names = new Map(catalog.map((entry) => [entry.id, entry.name]));
+  const entriesById = new Map(catalog.map((entry) => [entry.id, entry]));
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -100,19 +102,25 @@ export function PriorityList({ title, ids, catalog, editable, onRemove, onReorde
   };
 
   const entries = ids.map((id, index) => {
-    const name = names.get(id) ?? id;
+    const entry = entriesById.get(id);
+    const name = entry?.name ?? id;
+    const icon = entry?.icon ?? '';
     return editable ? (
       <SortableEntry
         key={id}
         id={id}
         index={index}
         name={name}
+        icon={icon}
         ids={ids}
         onRemove={onRemove}
         onReorder={onReorder}
       />
     ) : (
-      <li className="priority-entry" key={id}>{index + 1}. {name}</li>
+      <li className="priority-entry" key={id}>
+        {icon && <img className="catalog-icon" src={icon} alt="" loading="lazy" />}
+        <span>{index + 1}. {name}</span>
+      </li>
     );
   });
 

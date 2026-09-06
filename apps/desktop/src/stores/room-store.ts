@@ -4,6 +4,8 @@ import type { PriorityLists } from '../../../../packages/domain/src';
 import { createSupabaseListAdapter, createSupabaseRoomClient } from '../lib/supabase';
 
 export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline';
+export type PartnerPresence = 'waiting' | 'online' | 'offline';
+export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'error';
 
 export interface RoomTransport {
   update(roomId: string, participantToken: string, lists: PriorityLists): Promise<PriorityLists>;
@@ -12,11 +14,15 @@ export interface RoomTransport {
     participantToken: string,
     onChange: (lists: PriorityLists) => void,
     onConnectionChange: (state: ConnectionState) => void,
+    onPartnerPresenceChange: (state: PartnerPresence) => void,
   ): () => void;
 }
 
 export type RoomStoreState = {
   connection: ConnectionState;
+  partnerPresence: PartnerPresence;
+  saveStatus: SaveStatus;
+  saveError: string | null;
   ownLists: PriorityLists;
   draftOwnLists: PriorityLists;
   partnerLists: PriorityLists;
@@ -24,6 +30,7 @@ export type RoomStoreState = {
   participantToken: string | null;
   setOwnLists(lists: PriorityLists): void;
   saveOwnLists(): Promise<void>;
+  retrySave(): Promise<void>;
   connect(roomId: string, participantToken: string): void;
   disconnect(): void;
 };
@@ -51,6 +58,8 @@ export function createRoomStore(options: RoomStoreOptions = {}): RoomStore {
 export function makeRoomStore(transport: RoomTransport): RoomStore {
   const listeners = new Set<Listener>();
   let unsubscribe: (() => void) | null = null;
+  let draftRevision = 0;
+  let savePromise: Promise<void> | null = null;
   let state: RoomStoreState;
 
   const emit = () => listeners.forEach((listener) => listener());
@@ -61,37 +70,75 @@ export function makeRoomStore(transport: RoomTransport): RoomStore {
 
   state = {
     connection: 'offline',
+    partnerPresence: 'waiting',
+    saveStatus: 'saved',
+    saveError: null,
     ownLists: emptyLists(),
     draftOwnLists: emptyLists(),
     partnerLists: emptyLists(),
     roomId: null,
     participantToken: null,
     setOwnLists(lists) {
-      setState({ draftOwnLists: copyLists(lists) });
+      draftRevision += 1;
+      setState({ draftOwnLists: copyLists(lists), saveStatus: 'unsaved', saveError: null });
     },
     async saveOwnLists() {
-      try {
-        const confirmedLists = await transport.update(
-          state.roomId ?? '',
-          state.participantToken ?? '',
-          copyLists(state.draftOwnLists),
-        );
-        setState({ ownLists: copyLists(confirmedLists), draftOwnLists: copyLists(confirmedLists) });
-      } catch (error) {
-        setState({ draftOwnLists: copyLists(state.ownLists) });
-        throw error;
-      }
+      if (savePromise) return savePromise;
+      savePromise = (async () => {
+        while (true) {
+          const submittedRevision = draftRevision;
+          const submittedLists = copyLists(state.draftOwnLists);
+          setState({ saveStatus: 'saving', saveError: null });
+          try {
+            const confirmedLists = await transport.update(
+              state.roomId ?? '',
+              state.participantToken ?? '',
+              submittedLists,
+            );
+            if (draftRevision === submittedRevision) {
+              setState({
+                ownLists: copyLists(confirmedLists),
+                draftOwnLists: copyLists(confirmedLists),
+                saveStatus: 'saved',
+                saveError: null,
+              });
+              return;
+            }
+            setState({ ownLists: copyLists(confirmedLists), saveStatus: 'unsaved' });
+          } catch (error) {
+            setState({ saveStatus: 'error', saveError: errorMessage(error) });
+            throw error;
+          }
+        }
+      })().finally(() => { savePromise = null; });
+      return savePromise;
+    },
+    retrySave() {
+      return state.saveOwnLists();
     },
     connect(roomId, participantToken) {
       unsubscribe?.();
       unsubscribe = null;
-      setState({ roomId, participantToken, connection: 'connecting', partnerLists: emptyLists() });
+      draftRevision = 0;
+      savePromise = null;
+      setState({
+        roomId,
+        participantToken,
+        connection: 'connecting',
+        partnerPresence: 'waiting',
+        ownLists: emptyLists(),
+        draftOwnLists: emptyLists(),
+        partnerLists: emptyLists(),
+        saveStatus: 'saved',
+        saveError: null,
+      });
       if (!transport.subscribe) return;
       unsubscribe = transport.subscribe(
         roomId,
         participantToken,
         (lists) => setState({ partnerLists: copyLists(lists) }),
         (connection) => setState({ connection }),
+        (partnerPresence) => setState({ partnerPresence }),
       );
     },
     disconnect() {
@@ -101,6 +148,7 @@ export function makeRoomStore(transport: RoomTransport): RoomStore {
         roomId: null,
         participantToken: null,
         connection: 'offline',
+        partnerPresence: 'waiting',
         partnerLists: emptyLists(),
       });
     },
@@ -130,8 +178,14 @@ function createLazyDefaultRoomTransport(): RoomTransport {
     update(roomId, participantToken, lists) {
       return resolve().update(roomId, participantToken, lists);
     },
-    subscribe(roomId, participantToken, onChange, onConnectionChange) {
-      return resolve().subscribe?.(roomId, participantToken, onChange, onConnectionChange) ?? (() => undefined);
+    subscribe(roomId, participantToken, onChange, onConnectionChange, onPartnerPresenceChange) {
+      return resolve().subscribe?.(
+        roomId,
+        participantToken,
+        onChange,
+        onConnectionChange,
+        onPartnerPresenceChange,
+      ) ?? (() => undefined);
     },
   };
 }
@@ -162,4 +216,8 @@ function createDefaultRoomTransport(): RoomTransport {
 
 function copyLists(lists: PriorityLists): PriorityLists {
   return { champions: [...lists.champions], components: [...lists.components] };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : 'list_request_failed';
 }

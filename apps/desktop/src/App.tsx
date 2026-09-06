@@ -12,12 +12,26 @@ export default function App() {
   const [connectedRoom, setConnectedRoom] = useState<ConnectedRoom | null>(null);
   const [expanded, setExpanded] = useState(false);
   const connection = useRoomStore((state) => state.connection);
+  const partnerPresence = useRoomStore((state) => state.partnerPresence);
+  const saveStatus = useRoomStore((state) => state.saveStatus);
+  const saveError = useRoomStore((state) => state.saveError);
   const draftOwnLists = useRoomStore((state) => state.draftOwnLists);
   const partnerLists = useRoomStore((state) => state.partnerLists);
 
   useEffect(() => {
     document.documentElement.classList.toggle('overlay-active', connectedRoom !== null);
     return () => document.documentElement.classList.remove('overlay-active');
+  }, [connectedRoom]);
+
+  useEffect(() => {
+    if (!connectedRoom) return;
+    const leave = () => useRoomStore.getState().disconnect();
+    window.addEventListener('pagehide', leave);
+    window.addEventListener('beforeunload', leave);
+    return () => {
+      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('beforeunload', leave);
+    };
   }, [connectedRoom]);
 
   const handleConnected = (room: ConnectedRoom) => {
@@ -53,11 +67,15 @@ export default function App() {
               catalog={CATALOG}
               onSave={saveLists}
               onCollapse={() => changeExpanded(false)}
+              saveStatus={saveStatus}
+              saveError={saveError}
+              onRetry={() => { void useRoomStore.getState().retrySave().catch(() => undefined); }}
             />
           ) : (
             <CompactOverlay
               partnerLists={partnerLists}
               connection={connection}
+              partnerPresence={partnerPresence}
               onExpand={() => changeExpanded(true)}
             />
           )}

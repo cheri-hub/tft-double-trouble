@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import * as api from './features/room/room-api';
 
-const { connect, enterOverlayMode, setOverlayExpanded } = vi.hoisted(() => ({
+const { connect, disconnect, retrySave, enterOverlayMode, setOverlayExpanded } = vi.hoisted(() => ({
   connect: vi.fn(),
+  disconnect: vi.fn(),
+  retrySave: vi.fn().mockResolvedValue(undefined),
   enterOverlayMode: vi.fn().mockResolvedValue(false),
   setOverlayExpanded: vi.fn().mockResolvedValue(undefined),
 }));
@@ -18,10 +20,15 @@ vi.mock('./features/room/room-api', () => ({
 vi.mock('./stores/room-store', () => {
   const state = {
     connection: 'connected',
+    partnerPresence: 'online',
+    saveStatus: 'saved',
+    saveError: null,
     ownLists: { champions: [], components: [] },
     draftOwnLists: { champions: [], components: [] },
     partnerLists: { champions: [], components: [] },
     connect,
+    disconnect,
+    retrySave,
     setOwnLists: vi.fn(),
     saveOwnLists: vi.fn().mockResolvedValue(undefined),
   };
