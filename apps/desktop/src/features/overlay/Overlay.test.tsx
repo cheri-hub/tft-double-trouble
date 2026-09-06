@@ -96,6 +96,38 @@ describe('overlay', () => {
     expect(onAdd).not.toHaveBeenCalled();
   });
 
+  it('opens the full catalog alphabetically when the search field is focused', () => {
+    render(<CatalogPicker category="champion" selectedIds={[]} onAdd={vi.fn()} />);
+
+    const picker = screen.getByRole('combobox', { name: 'Buscar campeão' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+    fireEvent.focus(picker);
+
+    const options = screen.getAllByRole('option').map((option) => option.textContent ?? '');
+    const championCount = CATALOG.filter((entry) => entry.category === 'champion').length;
+    expect(options).toHaveLength(championCount);
+    expect([...options]).toEqual([...options].sort((a, b) => a.localeCompare(b, 'pt-BR')));
+  });
+
+  it('clears both lists only after a second confirming click', () => {
+    const onSave = vi.fn();
+    render(
+      <ExpandedOverlay
+        ownLists={{ champions: ['ahri'], components: ['bf-sword'] }}
+        catalog={CATALOG}
+        onSave={onSave}
+        onCollapse={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /limpar todas as prioridades/i }));
+    expect(onSave).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /confirmar limpeza/i }));
+    expect(onSave).toHaveBeenLastCalledWith({ champions: [], components: [] });
+  });
+
   it('adds and removes only local entries', () => {
     const onSave = vi.fn();
     render(

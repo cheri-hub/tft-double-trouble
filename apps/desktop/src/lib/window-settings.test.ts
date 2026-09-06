@@ -9,6 +9,7 @@ const { appWindow } = vi.hoisted(() => ({
     setMinSize: vi.fn(),
     setPosition: vi.fn(),
     setSize: vi.fn(),
+    close: vi.fn(),
     scaleFactor: vi.fn(),
     onMoved: vi.fn(),
     onResized: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('@tauri-apps/api/window', () => ({
 
 import {
   clampWindowSettings,
+  closeOverlay,
   enterOverlayMode,
   loadWindowSettings,
   saveWindowSettings,
@@ -140,6 +142,14 @@ describe('window settings', () => {
     expect(invoke).toHaveBeenCalledWith('save_window_settings', {
       settings: { x: 96, y: 72, width: 640, height: 560, expanded: true },
     });
+  });
+
+  it('closes the native overlay window', async () => {
+    appWindow.close.mockResolvedValue(undefined);
+
+    await closeOverlay();
+
+    expect(appWindow.close).toHaveBeenCalledTimes(1);
   });
 
   it('changes only the width when toggling expansion and keeps the content-driven height', async () => {

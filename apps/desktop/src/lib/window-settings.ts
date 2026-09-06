@@ -108,6 +108,10 @@ function browserMonitorBounds(): LogicalMonitorBounds[] {
   return [{ x: 0, y: 0, width: window.screen.availWidth, height: window.screen.availHeight }];
 }
 
+export async function closeOverlay(): Promise<void> {
+  await getCurrentWindow().close();
+}
+
 export async function enterOverlayMode(): Promise<boolean> {
   const appWindow = getCurrentWindow();
   currentSettings = await loadWindowSettings();
