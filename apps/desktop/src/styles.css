@@ -35,6 +35,24 @@ body {
   min-width: 0;
 }
 
+.overlay-drag-region {
+  display: grid;
+  min-height: 1.5rem;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(11, 14, 20, 0.7);
+  color: #7f8798;
+  cursor: grab;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.overlay-drag-region span {
+  pointer-events: none;
+}
+
 .room-entry,
 .overlay-shell {
   width: min(720px, 100%);

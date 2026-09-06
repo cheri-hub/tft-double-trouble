@@ -1,9 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import {
   getCurrentWindow,
+  LogicalPosition,
   LogicalSize,
-  PhysicalPosition,
-  PhysicalSize,
 } from '@tauri-apps/api/window';
 
 export type WindowSettings = {
@@ -48,19 +47,29 @@ export async function enterOverlayMode(): Promise<boolean> {
     appWindow.setAlwaysOnTop(true),
     appWindow.setResizable(true),
     appWindow.setMinSize(new LogicalSize(DEFAULT_WINDOW_SETTINGS.width, DEFAULT_WINDOW_SETTINGS.height)),
-    appWindow.setPosition(new PhysicalPosition(currentSettings.x, currentSettings.y)),
-    appWindow.setSize(new PhysicalSize(currentSettings.width, currentSettings.height)),
+    appWindow.setPosition(new LogicalPosition(currentSettings.x, currentSettings.y)),
+    appWindow.setSize(new LogicalSize(currentSettings.width, currentSettings.height)),
   ]);
 
   if (!listenersInstalled) {
     listenersInstalled = true;
-    await appWindow.onMoved(({ payload }) => {
-      currentSettings = { ...currentSettings, x: payload.x, y: payload.y };
-      void saveWindowSettings(currentSettings).catch(() => undefined);
+    await appWindow.onMoved(async ({ payload }) => {
+      const scaleFactor = await appWindow.scaleFactor();
+      currentSettings = {
+        ...currentSettings,
+        x: Math.round(payload.x / scaleFactor),
+        y: Math.round(payload.y / scaleFactor),
+      };
+      await saveWindowSettings(currentSettings).catch(() => undefined);
     });
-    await appWindow.onResized(({ payload }) => {
-      currentSettings = { ...currentSettings, width: payload.width, height: payload.height };
-      void saveWindowSettings(currentSettings).catch(() => undefined);
+    await appWindow.onResized(async ({ payload }) => {
+      const scaleFactor = await appWindow.scaleFactor();
+      currentSettings = {
+        ...currentSettings,
+        width: Math.round(payload.width / scaleFactor),
+        height: Math.round(payload.height / scaleFactor),
+      };
+      await saveWindowSettings(currentSettings).catch(() => undefined);
     });
   }
 
@@ -73,6 +82,6 @@ export async function setOverlayExpanded(expanded: boolean): Promise<void> {
     : { width: DEFAULT_WINDOW_SETTINGS.width, height: DEFAULT_WINDOW_SETTINGS.height };
   currentSettings = { ...currentSettings, ...size, expanded };
 
-  await getCurrentWindow().setSize(new PhysicalSize(size.width, size.height));
+  await getCurrentWindow().setSize(new LogicalSize(size.width, size.height));
   await saveWindowSettings(currentSettings);
 }

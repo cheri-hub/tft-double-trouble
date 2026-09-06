@@ -43,6 +43,9 @@ export default function App() {
     <main data-testid="app-root" className={`app-shell${connectedRoom ? ' overlay-mode' : ''}`}>
       {connectedRoom ? (
         <div className="overlay-stack">
+          <div className="overlay-drag-region" data-tauri-drag-region aria-label="Mover overlay">
+            <span>Double Trouble TFT</span>
+          </div>
           <RoomCode roomId={connectedRoom.roomId} />
           {expanded ? (
             <ExpandedOverlay

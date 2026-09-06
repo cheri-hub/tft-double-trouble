@@ -67,6 +67,7 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Criar sala' })[0]);
 
     expect(await screen.findByRole('heading', { name: 'Prioridades da dupla' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Mover overlay')).toHaveAttribute('data-tauri-drag-region');
     expect(enterOverlayMode).toHaveBeenCalledTimes(1);
   });
 

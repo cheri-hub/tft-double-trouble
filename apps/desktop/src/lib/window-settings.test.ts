@@ -9,6 +9,7 @@ const { appWindow } = vi.hoisted(() => ({
     setMinSize: vi.fn(),
     setPosition: vi.fn(),
     setSize: vi.fn(),
+    scaleFactor: vi.fn(),
     onMoved: vi.fn(),
     onResized: vi.fn(),
   },
@@ -18,15 +19,19 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => appWindow,
   LogicalPosition: class LogicalPosition {
+    readonly unit = 'logical';
     constructor(public x: number, public y: number) {}
   },
   LogicalSize: class LogicalSize {
+    readonly unit = 'logical';
     constructor(public width: number, public height: number) {}
   },
   PhysicalPosition: class PhysicalPosition {
+    readonly unit = 'physical';
     constructor(public x: number, public y: number) {}
   },
   PhysicalSize: class PhysicalSize {
+    readonly unit = 'physical';
     constructor(public width: number, public height: number) {}
   },
 }));
@@ -44,6 +49,7 @@ describe('window settings', () => {
     Object.values(appWindow).forEach((mock) => mock.mockReset());
     appWindow.onMoved.mockResolvedValue(() => undefined);
     appWindow.onResized.mockResolvedValue(() => undefined);
+    appWindow.scaleFactor.mockResolvedValue(1);
   });
 
   it('falls back to a safe compact position when settings are missing', async () => {
@@ -68,11 +74,19 @@ describe('window settings', () => {
   });
 
   it('switches the current window into overlay mode and restores its bounds', async () => {
-    let moved: ((event: { payload: { x: number; y: number } }) => void) | undefined;
+    let moved: ((event: { payload: { x: number; y: number } }) => void | Promise<void>) | undefined;
+    let resized:
+      | ((event: { payload: { width: number; height: number } }) => void | Promise<void>)
+      | undefined;
     appWindow.onMoved.mockImplementation(async (callback: typeof moved) => {
       moved = callback;
       return () => undefined;
     });
+    appWindow.onResized.mockImplementation(async (callback: typeof resized) => {
+      resized = callback;
+      return () => undefined;
+    });
+    appWindow.scaleFactor.mockResolvedValue(2);
     invoke.mockResolvedValue({ x: 80, y: 48, width: 640, height: 560, expanded: true });
 
     expect(await enterOverlayMode()).toBe(true);
@@ -81,13 +95,21 @@ describe('window settings', () => {
     expect(appWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
     expect(appWindow.setResizable).toHaveBeenCalledWith(true);
     expect(appWindow.setMinSize).toHaveBeenCalledWith(expect.objectContaining({ width: 320, height: 420 }));
-    expect(appWindow.setPosition).toHaveBeenCalledWith(expect.objectContaining({ x: 80, y: 48 }));
-    expect(appWindow.setSize).toHaveBeenCalledWith(expect.objectContaining({ width: 640, height: 560 }));
+    expect(appWindow.setPosition).toHaveBeenCalledWith(expect.objectContaining({ x: 80, y: 48, unit: 'logical' }));
+    expect(appWindow.setSize).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 640, height: 560, unit: 'logical' }),
+    );
 
     invoke.mockClear();
-    moved?.({ payload: { x: 96, y: 72 } });
+    await moved?.({ payload: { x: 192, y: 144 } });
     expect(invoke).toHaveBeenCalledWith('save_window_settings', {
       settings: { x: 96, y: 72, width: 640, height: 560, expanded: true },
+    });
+
+    invoke.mockClear();
+    await resized?.({ payload: { width: 1520, height: 1360 } });
+    expect(invoke).toHaveBeenCalledWith('save_window_settings', {
+      settings: { x: 96, y: 72, width: 760, height: 680, expanded: true },
     });
   });
 
@@ -98,7 +120,9 @@ describe('window settings', () => {
 
     await setOverlayExpanded(true);
 
-    expect(appWindow.setSize).toHaveBeenCalledWith(expect.objectContaining({ width: 760, height: 680 }));
+    expect(appWindow.setSize).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 760, height: 680, unit: 'logical' }),
+    );
     expect(invoke).toHaveBeenCalledWith('save_window_settings', {
       settings: { x: 24, y: 24, width: 760, height: 680, expanded: true },
     });
