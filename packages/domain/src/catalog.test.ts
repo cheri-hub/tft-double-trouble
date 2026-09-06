@@ -15,4 +15,9 @@ describe('catalog', () => {
       { id: 'bf-sword', name: 'B.F. Sword', category: 'component', icon: 'bf-sword' },
     ]));
   });
+
+  it('contains the complete 67-champion Set 15 snapshot roster', () => {
+    expect(CATALOG.filter((entry) => entry.category === 'champion')).toHaveLength(67);
+    expect(CATALOG.map((entry) => entry.id)).toEqual(expect.arrayContaining(['aatrox', 'ahri', 'ekko', 'zyra', 'zac']));
+  });
 });
