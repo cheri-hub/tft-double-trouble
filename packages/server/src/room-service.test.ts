@@ -78,4 +78,13 @@ describe('RoomService', () => {
     expect(await service.cleanupExpiredRooms(at('2026-09-06T12:17:00Z'))).toBe(0);
     expect(await service.countParticipants(first.roomId)).toBe(2);
   });
+
+  it('does not extend the expiry deadline when an offline participant leaves again', async () => {
+    const room = await service.createRoom(at('2026-09-06T12:00:00Z'));
+    await service.leaveRoom(room.roomId, room.participantToken, at('2026-09-06T12:01:00Z'));
+
+    await service.leaveRoom(room.roomId, room.participantToken, at('2026-09-06T12:10:00Z'));
+
+    expect(await service.cleanupExpiredRooms(at('2026-09-06T12:16:00Z'))).toBe(1);
+  });
 });

@@ -76,7 +76,7 @@ export class RoomService {
     participant.online = false;
     participant.lastSeenAt = timestamp;
 
-    if (room.participants.every((candidate) => !candidate.online)) {
+    if (room.participants.every((candidate) => !candidate.online) && room.lastBothOfflineAt === null) {
       room.lastBothOfflineAt = timestamp;
       room.expiresAt = new Date(timestamp.getTime() + ROOM_LIFETIME_MS);
     }

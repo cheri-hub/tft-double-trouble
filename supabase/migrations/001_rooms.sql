@@ -9,6 +9,7 @@ create table public.rooms (
     (last_both_offline_at is null and expires_at is null)
     or (
       last_both_offline_at is not null
+      and expires_at is not null
       and expires_at = last_both_offline_at + interval '15 minutes'
     )
   )
