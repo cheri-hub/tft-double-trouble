@@ -1,8 +1,27 @@
+import { useState } from 'react';
+
+import { RoomEntry, type ConnectedRoom } from './features/room/RoomEntry';
+import { useRoomStore } from './stores/room-store';
+
 export default function App() {
+  const [connectedRoom, setConnectedRoom] = useState<ConnectedRoom | null>(null);
+
+  const handleConnected = (room: ConnectedRoom) => {
+    useRoomStore.getState().connect(room.roomId, room.participantToken);
+    setConnectedRoom(room);
+  };
+
   return (
     <main data-testid="app-root" className="app-shell">
-      <h1>Double Trouble TFT</h1>
-      <p>Loading your next match...</p>
+      {connectedRoom ? (
+        <section className="overlay-shell" aria-label="Overlay da sala">
+          <p className="eyebrow">Sala conectada</p>
+          <h1>{connectedRoom.roomId}</h1>
+          <p>Você já pode controlar a dupla neste espaço.</p>
+        </section>
+      ) : (
+        <RoomEntry onConnected={handleConnected} />
+      )}
     </main>
   );
 }

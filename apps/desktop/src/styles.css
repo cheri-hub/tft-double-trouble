@@ -1,7 +1,9 @@
 :root {
   font-family: Inter, system-ui, sans-serif;
-  color: #e9edf5;
-  background: #151923;
+  color: #f2efe8;
+  background:
+    radial-gradient(circle at top, rgba(255, 174, 66, 0.2), transparent 35%),
+    linear-gradient(160deg, #12131a 0%, #1f2432 55%, #0f1218 100%);
 }
 
 body {
@@ -14,15 +16,101 @@ body {
   display: grid;
   min-height: 100vh;
   place-content: center;
-  gap: 0.5rem;
-  text-align: center;
+  padding: 2rem;
 }
 
-h1,
-p {
+.room-entry,
+.overlay-shell {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 1.25rem;
+  padding: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  background: rgba(11, 14, 20, 0.72);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+}
+
+.room-entry-copy,
+.room-entry-actions {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.room-entry h1,
+.overlay-shell h1,
+.room-entry p,
+.overlay-shell p {
   margin: 0;
 }
 
-p {
-  color: #aab3c5;
+.room-entry h1,
+.overlay-shell h1 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1;
+}
+
+.room-entry p,
+.overlay-shell p {
+  color: #b7c0d4;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.76rem;
+  color: #ffbf66;
+}
+
+.room-input {
+  display: grid;
+  gap: 0.45rem;
+  color: #e8ebf2;
+}
+
+.room-input input,
+button {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  padding: 0.9rem 1rem;
+}
+
+.room-input input:disabled,
+button:disabled {
+  opacity: 0.6;
+}
+
+button {
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.room-error {
+  color: #ff9f7a;
+}
+
+.room-code-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.room-code {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.1rem;
+  word-break: break-all;
 }
