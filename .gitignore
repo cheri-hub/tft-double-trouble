@@ -7,3 +7,7 @@ target/
 .env
 .env.*
 !.env.example
+
+/apps/desktop/src-tauri/gen/
+/apps/desktop/src-tauri/Cargo.lock
+/package-lock.json

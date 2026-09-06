@@ -2,6 +2,31 @@ import { readdir, readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+// Mirrors Vite's precedence: .env < .env.local < real process env.
+export async function resolveBuildEnv(cwd = process.cwd(), env = process.env) {
+  const merged = {};
+  for (const file of ['.env', '.env.local']) {
+    Object.assign(merged, await parseEnvFile(join(cwd, file)));
+  }
+  return { ...merged, ...env };
+}
+
+async function parseEnvFile(path) {
+  let raw;
+  try {
+    raw = await readFile(path, 'utf8');
+  } catch {
+    return {};
+  }
+  const values = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const match = /^\s*([\w.-]+)\s*=\s*(.*)$/.exec(line);
+    if (!match || line.trimStart().startsWith('#')) continue;
+    values[match[1]] = match[2].trim().replace(/^(['"])(.*)\1$/, '$2');
+  }
+  return values;
+}
+
 export function requireBuildEnv(env) {
   const names = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'];
   const missing = names.filter((name) => !env[name]?.trim());
@@ -30,6 +55,6 @@ async function javascriptFiles(directory) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await verifyBuiltConfig(process.argv[2] ?? 'dist', process.env);
+  await verifyBuiltConfig(process.argv[2] ?? 'dist', await resolveBuildEnv());
   console.log('Verified Supabase configuration in built artifact.');
 }
