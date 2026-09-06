@@ -74,3 +74,11 @@ pnpm --filter desktop tauri build
 ```
 
 Tauri writes MSI and NSIS bundles below `apps/desktop/src-tauri/target/release/bundle/`. The `Windows release` workflow runs the same checks for version tags (`v*`) or manual dispatch and uploads both installer formats as a workflow artifact.
+
+The editable icon source is `apps/desktop/src-tauri/icons/app-icon.svg`. After changing it, regenerate the checked-in Tauri icon set from the repository root with:
+
+```powershell
+pnpm --filter desktop tauri icon src-tauri/icons/app-icon.svg --output src-tauri/icons
+```
+
+Keep the generated desktop files referenced by `bundle.icon` in `tauri.conf.json`; Windows packaging requires `icon.ico`.
