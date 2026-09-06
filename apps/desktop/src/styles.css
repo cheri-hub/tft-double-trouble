@@ -154,7 +154,8 @@ button:hover:not(:disabled) {
 
 .connection-connected { color: #86e6b3; }
 .connection-connecting { color: #ffcf78; }
-.connection-disconnected { color: #ff9f7a; }
+.connection-reconnecting { color: #ffcf78; }
+.connection-offline { color: #ff9f7a; }
 
 .priority-grid {
   display: grid;

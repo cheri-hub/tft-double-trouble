@@ -1,17 +1,19 @@
 import { CATALOG, type PriorityLists } from '../../../../../packages/domain/src';
+import type { ConnectionState } from '../../stores/room-store';
 
 import { PriorityList } from './PriorityList';
 
 type CompactOverlayProps = {
   partnerLists: PriorityLists;
-  connection: 'connected' | 'connecting' | 'disconnected';
+  connection: ConnectionState;
   onExpand: () => void;
 };
 
 const connectionLabels: Record<CompactOverlayProps['connection'], string> = {
   connected: 'Conectado',
   connecting: 'Conectando…',
-  disconnected: 'Desconectado',
+  reconnecting: 'Reconectando…',
+  offline: 'Offline',
 };
 
 export function CompactOverlay({ partnerLists, connection, onExpand }: CompactOverlayProps) {

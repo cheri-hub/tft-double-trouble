@@ -1,12 +1,24 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CATALOG } from '../../../../../packages/domain/src';
 import { CatalogPicker } from './CatalogPicker';
 import { CompactOverlay } from './CompactOverlay';
 import { ExpandedOverlay } from './ExpandedOverlay';
+import type { ConnectionState } from '../../stores/room-store';
 
 afterEach(cleanup);
+
+class TestPointerEvent extends MouseEvent {
+  readonly isPrimary: boolean;
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.isPrimary = init.isPrimary ?? false;
+  }
+}
+
+Object.defineProperty(window, 'PointerEvent', { configurable: true, value: TestPointerEvent });
 
 describe('overlay', () => {
   it('shows partner lists in priority order and never exposes edit controls', () => {
@@ -23,6 +35,31 @@ describe('overlay', () => {
     expect(screen.getByText('Conectado')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /remover/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /mover/i })).not.toBeInTheDocument();
+  });
+
+  it.each<[ConnectionState, string]>([
+    ['connecting', 'Conectando…'],
+    ['connected', 'Conectado'],
+    ['reconnecting', 'Reconectando…'],
+    ['offline', 'Offline'],
+  ])('renders the %s connection state as %s', (connection, label) => {
+    render(
+      <CompactOverlay
+        partnerLists={{ champions: [], components: [] }}
+        connection={connection}
+        onExpand={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  it('shows empty partner-list states without changing the supplied lists', () => {
+    const partnerLists = { champions: [] as string[], components: [] as string[] };
+    render(<CompactOverlay partnerLists={partnerLists} connection="offline" onExpand={vi.fn()} />);
+
+    expect(screen.getAllByText('Nenhuma prioridade adicionada.')).toHaveLength(2);
+    expect(partnerLists).toEqual({ champions: [], components: [] });
   });
 
   it('filters catalog options and never emits an already selected id', () => {
@@ -62,6 +99,23 @@ describe('overlay', () => {
     expect(onSave).toHaveBeenLastCalledWith({ champions: [], components: [] });
   });
 
+  it('locks catalog add controls when the category already has ten entries', () => {
+    const tenChampions = CATALOG.filter((entry) => entry.category === 'champion')
+      .slice(0, 10)
+      .map((entry) => entry.id);
+    render(
+      <ExpandedOverlay
+        ownLists={{ champions: tenChampions, components: [] }}
+        catalog={CATALOG}
+        onSave={vi.fn()}
+        onCollapse={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Buscar campeão' })).toBeDisabled();
+    expect(screen.getByPlaceholderText('Limite de 10 atingido')).toBeDisabled();
+  });
+
   it('reorders one local category without changing the other', () => {
     const onSave = vi.fn();
     render(
@@ -79,4 +133,76 @@ describe('overlay', () => {
       components: ['bf-sword'],
     });
   });
+
+  it('reorders through the configured dnd-kit keyboard sensor', async () => {
+    const onSave = vi.fn();
+    render(
+      <ExpandedOverlay
+        ownLists={{ champions: ['ahri', 'akali'], components: [] }}
+        catalog={CATALOG}
+        onSave={onSave}
+        onCollapse={vi.fn()}
+      />,
+    );
+
+    const handle = screen.getByRole('button', { name: 'Arrastar Ahri' });
+    setSortableRects(handle, screen.getByRole('button', { name: 'Arrastar Akali' }));
+    handle.focus();
+    fireEvent.keyDown(handle, { code: 'Space' });
+    await settleDnd();
+    fireEvent.keyDown(document, { code: 'ArrowDown' });
+    await settleDnd();
+    fireEvent.keyDown(document, { code: 'Space' });
+    await settleDnd();
+
+    expect(onSave).toHaveBeenLastCalledWith({ champions: ['akali', 'ahri'], components: [] });
+  });
+
+  it('reorders through the configured dnd-kit pointer sensor', async () => {
+    const onSave = vi.fn();
+    render(
+      <ExpandedOverlay
+        ownLists={{ champions: ['ahri', 'akali'], components: [] }}
+        catalog={CATALOG}
+        onSave={onSave}
+        onCollapse={vi.fn()}
+      />,
+    );
+
+    const ahriHandle = screen.getByRole('button', { name: 'Arrastar Ahri' });
+    const akaliHandle = screen.getByRole('button', { name: 'Arrastar Akali' });
+    setSortableRects(ahriHandle, akaliHandle);
+
+    fireEvent.pointerDown(ahriHandle, { button: 0, clientX: 10, clientY: 10, isPrimary: true });
+    await settleDnd();
+    fireEvent.pointerMove(document, { clientX: 10, clientY: 70, isPrimary: true });
+    await settleDnd();
+    fireEvent.pointerUp(document, { clientX: 10, clientY: 70, isPrimary: true });
+    await settleDnd();
+
+    expect(onSave).toHaveBeenLastCalledWith({ champions: ['akali', 'ahri'], components: [] });
+  });
 });
+
+function setSortableRects(firstHandle: HTMLElement, secondHandle: HTMLElement) {
+  vi.spyOn(firstHandle.closest('li')!, 'getBoundingClientRect').mockReturnValue(rect(0));
+  vi.spyOn(secondHandle.closest('li')!, 'getBoundingClientRect').mockReturnValue(rect(50));
+}
+
+async function settleDnd() {
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+}
+
+function rect(top: number): DOMRect {
+  return {
+    x: 0,
+    y: top,
+    top,
+    left: 0,
+    right: 200,
+    bottom: top + 40,
+    width: 200,
+    height: 40,
+    toJSON: () => ({}),
+  };
+}
