@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PriorityLists } from '../../../../packages/domain/src';
 
 import { createSupabaseListAdapter, type RealtimeChannelLike } from '../lib/supabase';
-import { makeRoomStore, type ConnectionState, type RoomTransport } from './room-store';
+import { createRoomStore, makeRoomStore, type ConnectionState, type RoomTransport } from './room-store';
 
 const emptyLists: PriorityLists = { champions: [], components: [] };
 
@@ -15,6 +15,7 @@ describe('room store', () => {
 
     await expect(store.getState().saveOwnLists()).rejects.toThrow('offline');
     expect(store.getState().ownLists).toEqual(emptyLists);
+    expect(store.getState().draftOwnLists).toEqual(emptyLists);
   });
 
   it('replaces the confirmed list only with the server response', async () => {
@@ -56,6 +57,31 @@ describe('room store', () => {
     store.getState().disconnect();
     expect(unsubscribe).toHaveBeenCalledOnce();
     expect(store.getState()).toMatchObject({ roomId: null, connection: 'offline' });
+  });
+
+  it('wires a default transport that can save and receive partner lists end to end', async () => {
+    const transport: RoomTransport = {
+      update: vi.fn(async (_roomId, _token, lists) => ({ ...lists, champions: [...lists.champions, 'zaun'] })),
+      subscribe: (_roomId, _token, onChange, onConnectionChange) => {
+        onConnectionChange('connected');
+        onChange({ champions: ['partner-champ'], components: [] });
+        return vi.fn();
+      },
+    };
+    const store = createRoomStore({ transport });
+
+    store.getState().connect('room-id', 'participant-token');
+    store.getState().setOwnLists({ champions: ['ahri'], components: [] });
+    await store.getState().saveOwnLists();
+
+    expect(store.getState().connection).toBe('connected');
+    expect(store.getState().partnerLists).toEqual({ champions: ['partner-champ'], components: [] });
+    expect(store.getState().ownLists).toEqual({ champions: ['ahri', 'zaun'], components: [] });
+    expect(transport.update).toHaveBeenCalledWith(
+      'room-id',
+      'participant-token',
+      { champions: ['ahri'], components: [] },
+    );
   });
 });
 
