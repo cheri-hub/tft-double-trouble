@@ -1,0 +1,19 @@
+{
+  "name": "@double-trouble/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/room-service.ts",
+      "import": "./src/room-service.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest",
+    "vitest": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
+}
