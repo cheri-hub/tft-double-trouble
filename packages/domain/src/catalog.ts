@@ -1,6 +1,8 @@
 import type { CatalogEntry } from './types';
 
-// Starter catalog for the current set. IDs are stable and intentionally independent of display names.
+// Snapshot: TFT Set 15 K.O. Coliseum, with canonical Riot data IDs as of Aug 2025.
+// IDs are stable and intentionally independent of display names. Component IDs are
+// the ten canonical basic components in that set; no synthesized aliases are used.
 export const CATALOG: readonly CatalogEntry[] = [
   { id: 'ahri', name: 'Ahri', category: 'champion', icon: 'ahri' },
   { id: 'garen', name: 'Garen', category: 'champion', icon: 'garen' },
@@ -24,6 +26,4 @@ export const CATALOG: readonly CatalogEntry[] = [
   { id: 'sparring-gloves', name: 'Sparring Gloves', category: 'component', icon: 'sparring-gloves' },
   { id: 'spatula', name: 'Spatula', category: 'component', icon: 'spatula' },
   { id: 'frying-pan', name: 'Frying Pan', category: 'component', icon: 'frying-pan' },
-  { id: 'needlessly-large-rod-2', name: 'Needlessly Large Rod+', category: 'component', icon: 'needlessly-large-rod-2' },
-  { id: 'training-gloves', name: 'Training Gloves', category: 'component', icon: 'training-gloves' },
 ];

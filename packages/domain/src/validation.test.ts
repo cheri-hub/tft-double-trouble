@@ -17,7 +17,7 @@ describe('priority validation', () => {
 
   it('rejects unknown and wrong-category entries with their indexes', () => {
     expect(validatePriorityList(['not-in-catalog'], CATALOG)).toEqual({ ok: false, code: 'unknown', index: 0 });
-    expect(validatePriorityList([components[0]], CATALOG, 'champion')).toEqual({ ok: false, code: 'wrong_category', index: 0 });
+    expect(validatePriorityLists({ champions: [components[0]], components: [] }, CATALOG)).toEqual({ ok: false, code: 'wrong_category', index: 0 });
   });
 
   it('accepts empty lists and preserves input order', () => {
