@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 
-import { RoomCode } from './RoomCode';
 import { createRoom, joinRoom } from './room-api';
 
 export type ConnectedRoom = {
@@ -24,13 +23,11 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 export function RoomEntry({ onConnected }: Props) {
   const [roomId, setRoomId] = useState('');
-  const [createdRoom, setCreatedRoom] = useState<ConnectedRoom | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const canSubmit = useMemo(() => roomId.trim().length > 0, [roomId]);
 
   const connect = (room: ConnectedRoom) => {
-    setCreatedRoom(room);
     onConnected(room);
   };
 
@@ -92,9 +89,7 @@ export function RoomEntry({ onConnected }: Props) {
           Entrar com UUID
         </button>
       </div>
-
       {error ? <p className="room-error" role="alert">{error}</p> : null}
-      {createdRoom ? <RoomCode roomId={createdRoom.roomId} /> : null}
     </section>
   );
 }

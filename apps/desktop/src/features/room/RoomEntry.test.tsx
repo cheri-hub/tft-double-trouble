@@ -32,8 +32,8 @@ describe('RoomEntry', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Criar sala' }));
 
-    expect(await screen.findByText('room-uuid')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copiar UUID' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Criar sala' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copiar UUID' })).not.toBeInTheDocument();
   });
 
   it('shows a translated error when joining a missing room', async () => {
