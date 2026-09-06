@@ -137,6 +137,13 @@ function createLazyDefaultRoomTransport(): RoomTransport {
 }
 
 function createDefaultRoomTransport(): RoomTransport {
+  if (import.meta.env.VITE_E2E_TEST === 'true') {
+    const injectedTransport = (
+      globalThis as typeof globalThis & { __DOUBLE_TROUBLE_E2E_TRANSPORT__?: RoomTransport }
+    ).__DOUBLE_TROUBLE_E2E_TRANSPORT__;
+    if (injectedTransport) return injectedTransport;
+  }
+
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 

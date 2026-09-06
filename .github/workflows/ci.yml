@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  linux-tests:
+    name: Unit, integration, accessibility, and E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: pnpm install --frozen-lockfile
+      - name: Domain and server tests
+        run: pnpm --filter @double-trouble/domain vitest run && pnpm --filter @double-trouble/server vitest run
+      - name: Edge Function integration tests
+        run: deno test --allow-env --allow-net supabase/functions/room-join/index.test.ts
+      - name: Desktop component and accessibility tests
+        run: pnpm --filter desktop vitest run
+      - name: Web build
+        run: pnpm --filter desktop build
+      - name: E2E typecheck
+        run: pnpm typecheck:e2e
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Two-client smoke test
+        run: pnpm exec playwright test
+
+  windows-build:
+    name: Windows smoke test and Tauri build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - name: Desktop smoke test
+        run: pnpm --filter desktop vitest run src/App.test.tsx
+      - name: Build Windows installer
+        run: pnpm --filter desktop tauri build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: double-trouble-tft-windows-ci
+          if-no-files-found: error
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe

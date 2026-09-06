@@ -4,6 +4,13 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "pnpm --filter desktop dev",
-    "build": "pnpm --filter desktop build"
+    "build": "pnpm --filter desktop build",
+    "test": "pnpm --filter @double-trouble/domain vitest run && pnpm --filter @double-trouble/server vitest run && pnpm --filter desktop vitest run",
+    "test:e2e": "playwright test",
+    "typecheck:e2e": "pnpm --filter desktop exec tsc -p ../../tsconfig.e2e.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "@types/node": "22.20.1"
   }
 }
