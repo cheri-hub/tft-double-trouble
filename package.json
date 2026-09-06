@@ -1,0 +1,9 @@
+{
+  "name": "double-trouble-tft",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "pnpm --filter desktop dev",
+    "build": "pnpm --filter desktop build"
+  }
+}
