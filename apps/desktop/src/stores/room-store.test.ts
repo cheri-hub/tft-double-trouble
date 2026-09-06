@@ -2,10 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PriorityLists } from '../../../../packages/domain/src';
 
+import * as supabase from '../lib/supabase';
 import { createSupabaseListAdapter, type RealtimeChannelLike } from '../lib/supabase';
 import { createRoomStore, makeRoomStore, type ConnectionState, type RoomTransport } from './room-store';
 
 const emptyLists: PriorityLists = { champions: [], components: [] };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 describe('room store', () => {
   it('retains the last confirmed list when an update fails', async () => {
@@ -60,15 +66,32 @@ describe('room store', () => {
   });
 
   it('wires a default transport that can save and receive partner lists end to end', async () => {
-    const transport: RoomTransport = {
-      update: vi.fn(async (_roomId, _token, lists) => ({ ...lists, champions: [...lists.champions, 'zaun'] })),
-      subscribe: (_roomId, _token, onChange, onConnectionChange) => {
-        onConnectionChange('connected');
-        onChange({ champions: ['partner-champ'], components: [] });
-        return vi.fn();
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.test');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key');
+    const adapterUpdate = vi.fn(async (_roomId: string, _token: string, lists: PriorityLists) => ({
+      ...lists,
+      champions: [...lists.champions, 'zaun'],
+    }));
+    const adapterSubscribe = vi.fn((_roomId, _token, onChange, onConnectionChange) => {
+      onConnectionChange('connected');
+      onChange({ champions: ['partner-champ'], components: [] });
+      return vi.fn();
+    });
+    vi.spyOn(supabase, 'createSupabaseRoomClient').mockReturnValue({
+      functionsUrl: 'https://example.test/functions/v1',
+      anonKey: 'anon-key',
+      realtime: {
+        channel: vi.fn(),
+        removeChannel: vi.fn(),
       },
-    };
-    const store = createRoomStore({ transport });
+    });
+    vi.spyOn(supabase, 'createSupabaseListAdapter').mockReturnValue({
+      updateOwnLists: adapterUpdate,
+      subscribeToPartnerLists: adapterSubscribe,
+      update: adapterUpdate,
+      subscribe: adapterSubscribe,
+    });
+    const store = createRoomStore();
 
     store.getState().connect('room-id', 'participant-token');
     store.getState().setOwnLists({ champions: ['ahri'], components: [] });
@@ -77,7 +100,7 @@ describe('room store', () => {
     expect(store.getState().connection).toBe('connected');
     expect(store.getState().partnerLists).toEqual({ champions: ['partner-champ'], components: [] });
     expect(store.getState().ownLists).toEqual({ champions: ['ahri', 'zaun'], components: [] });
-    expect(transport.update).toHaveBeenCalledWith(
+    expect(adapterUpdate).toHaveBeenCalledWith(
       'room-id',
       'participant-token',
       { champions: ['ahri'], components: [] },

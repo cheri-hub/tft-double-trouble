@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import type { PriorityLists } from '../../../../packages/domain/src';
-import { createSupabaseListAdapter } from '../lib/supabase';
+import { createSupabaseListAdapter, createSupabaseRoomClient } from '../lib/supabase';
 
 export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline';
 
@@ -137,27 +137,19 @@ function createLazyDefaultRoomTransport(): RoomTransport {
 }
 
 function createDefaultRoomTransport(): RoomTransport {
-  const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  if (!functionsUrl || !anonKey) {
+  if (!supabaseUrl || !anonKey) {
     throw new Error('room_transport_not_configured');
   }
 
-  const supabase = (globalThis as { supabase?: { channel(topic: string): unknown; removeChannel(channel: unknown): unknown } }).supabase;
-  if (!supabase) throw new Error('room_transport_not_configured');
+  const client = createSupabaseRoomClient(supabaseUrl, anonKey);
 
   return createSupabaseListAdapter({
-    functionsUrl,
-    anonKey,
-    realtime: {
-      channel(topic: string) {
-        return supabase.channel(topic) as never;
-      },
-      removeChannel(channel: unknown) {
-        return supabase.removeChannel(channel);
-      },
-    },
+    functionsUrl: client.functionsUrl,
+    anonKey: client.anonKey,
+    realtime: client.realtime,
   });
 }
 

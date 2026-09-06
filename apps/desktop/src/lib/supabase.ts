@@ -1,3 +1,5 @@
+import { createClient } from '@supabase/supabase-js';
+
 import type { PriorityLists } from '../../../../packages/domain/src';
 
 import type { ConnectionState, RoomTransport } from '../stores/room-store';
@@ -131,6 +133,32 @@ export function createSupabaseListAdapter(options: SupabaseListAdapterOptions): 
     subscribeToPartnerLists,
     update: updateOwnLists,
     subscribe: subscribeToPartnerLists,
+  };
+}
+
+export type SupabaseRoomClient = {
+  functionsUrl: string;
+  anonKey: string;
+  realtime: RealtimeClientLike;
+};
+
+export function createSupabaseRoomClient(url: string, anonKey: string): SupabaseRoomClient {
+  const client = createClient(url, anonKey, {
+    auth: { persistSession: false },
+    realtime: { params: { eventsPerSecond: 2 } },
+  });
+
+  return {
+    functionsUrl: `${url.replace(/\/$/, '')}/functions/v1`,
+    anonKey,
+    realtime: {
+      channel(topic: string) {
+        return client.channel(topic) as RealtimeChannelLike;
+      },
+      removeChannel(channel: RealtimeChannelLike) {
+        return client.removeChannel(channel as never);
+      },
+    },
   };
 }
 
