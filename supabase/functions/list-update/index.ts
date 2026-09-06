@@ -56,8 +56,14 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (error) throw new Error(error.message);
 
     const channel = client.channel(`room:${body.roomId}`);
-    await channel.send({ type: 'broadcast', event: 'list_changed', payload: { slot: participant.slot } });
-    await client.removeChannel(channel);
+    try {
+      await channel.send({ type: 'broadcast', event: 'list_changed', payload: { slot: participant.slot } });
+    } catch {
+      // Best effort: the list update itself is authoritative, and local edge runtimes
+      // can drop short-lived broadcast channels before the send resolves.
+    } finally {
+      await client.removeChannel(channel).catch(() => undefined);
+    }
     return json({ lists: confirmed });
   } catch (error) {
     return errorResponse(error);

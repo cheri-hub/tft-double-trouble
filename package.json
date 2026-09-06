@@ -5,8 +5,10 @@
   "scripts": {
     "dev": "pnpm --filter desktop dev",
     "build": "pnpm --filter desktop build",
-    "test": "pnpm test:config && pnpm --filter @double-trouble/domain vitest run && pnpm --filter @double-trouble/server vitest run && pnpm --filter desktop vitest run",
+    "test": "pnpm test:config && pnpm test:catalog-sync && pnpm --filter @double-trouble/domain vitest run && pnpm --filter @double-trouble/server vitest run && pnpm --filter desktop vitest run",
     "test:config": "node --test scripts/build-env.test.mjs",
+    "test:catalog-sync": "node --test scripts/sync-catalog.test.mjs",
+    "sync:catalog": "node scripts/sync-catalog.mjs",
     "check:functions": "node scripts/check-functions.mjs",
     "test:integration": "deno test --allow-env --allow-net tests/integration/supabase-contract.test.ts",
     "test:e2e": "playwright test",

@@ -38,7 +38,16 @@ pnpm --filter desktop tauri dev
 
 ## Tests
 
-Run the domain, server, component, and accessibility coverage with `pnpm test`. Run the Edge Function integration check with `deno test --allow-env --allow-net supabase/functions/room-join/index.test.ts`.
+Run the domain, server, component, and accessibility coverage with `pnpm test`. That suite now includes a catalog contract check that verifies `supabase/functions/_shared/catalog-ids.ts` matches `packages/domain/src/catalog.ts`.
+
+If you edit the catalog, regenerate the shared edge-function IDs first:
+
+```powershell
+pnpm sync:catalog
+pnpm test:catalog-sync
+```
+
+Run the Edge Function integration check with `deno test --allow-env --allow-net supabase/functions/room-join/index.test.ts`.
 
 The browser scenario is hermetic—it provides two isolated clients, separate participant tokens, and a fake expiry clock, so it does not require Docker or a running Supabase instance:
 
@@ -52,14 +61,16 @@ The scenario creates and joins a room through the real UI, updates player A's li
 
 ## Update the TFT catalog
 
-Edit `packages/domain/src/catalog.ts`. Keep stable lowercase IDs, preserve the explicit display order, and update the snapshot version, source URL, and filtering-rule comment above `CATALOG`. Then run:
+Edit `packages/domain/src/catalog.ts`. Keep stable lowercase IDs, preserve the explicit display order, and update the snapshot version, source URL, and filtering-rule comment above `CATALOG`. Then regenerate the edge-function contract and rerun the catalog tests:
 
 ```powershell
+pnpm sync:catalog
+pnpm test:catalog-sync
 pnpm --filter @double-trouble/domain vitest run
 pnpm --filter desktop vitest run
 ```
 
-Catalog IDs are persisted in room lists, so renaming or removing an existing ID is a data-contract change rather than a display-only edit.
+Catalog IDs are persisted in room lists, so renaming or removing an existing ID is a data-contract change rather than a display-only edit. The generator keeps the client and server ID lists in lockstep.
 
 ## Windows overlay and release
 

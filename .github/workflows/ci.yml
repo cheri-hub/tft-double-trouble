@@ -29,7 +29,7 @@ jobs:
           deno-version: v2.x
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.51.0
       - run: pnpm install --frozen-lockfile
       - name: Domain and server tests
         run: pnpm --filter @double-trouble/domain vitest run && pnpm --filter @double-trouble/server vitest run

@@ -18,8 +18,13 @@ Deno.serve(async (request) => {
     });
     if (error) throw new Error(error.message);
     const channel = client.channel(`room:${body.roomId}`);
-    await channel.send({ type: 'broadcast', event: 'presence_changed', payload: {} });
-    await client.removeChannel(channel);
+    try {
+      await channel.send({ type: 'broadcast', event: 'presence_changed', payload: {} });
+    } catch {
+      // Presence updates are advisory; heartbeat success should not depend on broadcast delivery.
+    } finally {
+      await client.removeChannel(channel).catch(() => undefined);
+    }
     return json({ ok: true });
   } catch (error) {
     return errorResponse(error);

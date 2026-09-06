@@ -12,6 +12,7 @@ const { appWindow } = vi.hoisted(() => ({
     scaleFactor: vi.fn(),
     onMoved: vi.fn(),
     onResized: vi.fn(),
+    availableMonitors: vi.fn(),
   },
 }));
 
@@ -51,6 +52,7 @@ describe('window settings', () => {
     appWindow.onMoved.mockResolvedValue(() => undefined);
     appWindow.onResized.mockResolvedValue(() => undefined);
     appWindow.scaleFactor.mockResolvedValue(1);
+    appWindow.availableMonitors.mockResolvedValue([]);
   });
 
   it('falls back to a safe compact position when settings are missing', async () => {
@@ -70,6 +72,26 @@ describe('window settings', () => {
       { x: 50_000, y: -50_000, width: 20_000, height: 10, expanded: true },
       [{ x: 0, y: 0, width: 1920, height: 1080 }],
     )).toEqual({ x: 24, y: 24, width: 1920, height: 420, expanded: true });
+  });
+
+  it('preserves negative coordinates when they intersect a secondary monitor', () => {
+    expect(clampWindowSettings(
+      { x: -1_280, y: 80, width: 640, height: 420, expanded: false },
+      [
+        { x: -1_280, y: 0, width: 1_280, height: 1_024 },
+        { x: 0, y: 0, width: 1_920, height: 1_080 },
+      ],
+    )).toEqual({ x: -1_280, y: 80, width: 640, height: 420, expanded: false });
+  });
+
+  it('keeps 4k-sized bounds when they fit a monitor', () => {
+    expect(clampWindowSettings(
+      { x: 2_560, y: 120, width: 2_560, height: 1_440, expanded: true },
+      [
+        { x: 0, y: 0, width: 1_920, height: 1_080 },
+        { x: 2_560, y: 0, width: 3_840, height: 2_160 },
+      ],
+    )).toEqual({ x: 2_560, y: 120, width: 2_560, height: 1_440, expanded: true });
   });
 
   it('persists only window geometry and expansion state', async () => {
@@ -95,6 +117,18 @@ describe('window settings', () => {
       return () => undefined;
     });
     appWindow.scaleFactor.mockResolvedValue(2);
+    appWindow.availableMonitors.mockResolvedValue([
+      {
+        name: 'primary',
+        scaleFactor: 2,
+        position: { x: 0, y: 0 },
+        size: { width: 1_920, height: 1_080 },
+        workArea: {
+          position: { x: 0, y: 0 },
+          size: { width: 1_920, height: 1_080 },
+        },
+      },
+    ]);
     invoke.mockResolvedValue({ x: 80, y: 48, width: 640, height: 560, expanded: true });
 
     expect(await enterOverlayMode()).toBe(true);
