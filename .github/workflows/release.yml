@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish Windows release
+    runs-on: windows-latest
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Align app version with the tag
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "Building version $version"
+          node -e "const f='apps/desktop/src-tauri/tauri.conf.json',fs=require('fs');const j=JSON.parse(fs.readFileSync(f));j.version='$version';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+          sed -i "s/^version = \".*\"/version = \"$version\"/" apps/desktop/src-tauri/Cargo.toml
+
+      - run: pnpm install --frozen-lockfile
+      - name: Build Windows bundles
+        run: pnpm --filter desktop tauri build
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Double Trouble TFT ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
