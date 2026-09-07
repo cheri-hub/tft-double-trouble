@@ -1,19 +1,55 @@
 # Double Trouble TFT
 
-Double Trouble TFT is a two-player Windows overlay for sharing ordered champion and component priorities. A room holds at most two participants and expires 15 minutes after both participants disconnect.
+Double Trouble TFT is a two-player Windows overlay for sharing ordered champion and
+component priorities during a Teamfight Tactics Double Up game. A room holds at most
+two participants and expires 15 minutes after both disconnect.
+
+The desktop shell is Tauri 2 + React 19. The overlay UI is built on Tailwind v4, Radix
+primitives, and vendored [Watermelon UI](https://ui.watermelon.sh) components
+(`apps/desktop/src/components/ui`). Real-time state lives in Supabase (Postgres +
+Realtime + Edge Functions); rooms hold only transient data and no accounts.
 
 ## Prerequisites
 
-- Node.js 22 and pnpm 9.15.4
-- Rust stable and the Tauri Windows prerequisites
-- Supabase CLI and Docker Desktop for the local backend
-- Microsoft Edge WebView2 Runtime for the Windows desktop shell
+| Tool | Version | Needed for |
+| --- | --- | --- |
+| Node.js | 22 | everything |
+| pnpm | 9.15.4 | everything |
+| Rust | stable + [Tauri Windows prerequisites](https://tauri.app/start/prerequisites/) | `tauri dev`, `tauri build` |
+| Microsoft Edge WebView2 Runtime | current | running the Windows shell |
+| Deno | 2.x | Edge Function tests only |
+| Supabase CLI + Docker Desktop | CLI 2.x | local backend + integration tests only |
 
-Install JavaScript dependencies with `pnpm install`.
+Install JavaScript dependencies from the repository root:
 
-## Run the local backend
+```powershell
+pnpm install
+```
 
-Start Docker Desktop, then initialize the database from the repository root:
+## Configure
+
+The desktop app reads its Supabase connection from `apps/desktop/.env.local`
+(git-ignored). Copy the template and fill it in:
+
+```powershell
+copy apps\desktop\.env.example apps\desktop\.env.local
+```
+
+```dotenv
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_ANON_KEY=<ANON_KEY>
+```
+
+For a local backend, get the values from `supabase status -o env` after starting it
+(below). For a hosted project, use its API URL and public anon key. Only the anon key
+belongs in a `VITE_` variable — never the service-role key, and never commit either
+env file or participant tokens.
+
+## Run
+
+### Local backend (optional — only for end-to-end manual testing)
+
+Start Docker Desktop, then from the repository root:
 
 ```powershell
 supabase start
@@ -21,47 +57,80 @@ supabase db reset --local
 supabase functions serve
 ```
 
-In another terminal, run `supabase status -o env`. Create `apps/desktop/.env.local` using the reported API URL and anonymous key:
+Run `supabase status -o env` in another terminal and put `API_URL` / `ANON_KEY` into
+`apps/desktop/.env.local`. The Supabase CLI supplies `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` to the served Edge Functions.
 
-```dotenv
-VITE_SUPABASE_URL=http://127.0.0.1:54321
-VITE_SUPABASE_ANON_KEY=<ANON_KEY from supabase status>
-```
-
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are supplied to locally served Edge Functions by the Supabase CLI. Do not put the service-role key in a `VITE_` variable or commit either local environment file or participant tokens.
-
-Start the web UI with `pnpm dev`, or the native shell with:
+### App
 
 ```powershell
-pnpm --filter desktop tauri dev
+pnpm dev                          # web UI at http://localhost:5173 (React flow only)
+pnpm --filter desktop tauri dev   # native borderless overlay window
 ```
 
-## Tests
+Browser dev verifies the React flow but cannot certify native borderless positioning,
+DPI behavior, transparency, or always-on-top. Do that on Windows with TFT in
+**windowed-borderless** mode (exclusive fullscreen blocks third-party overlays).
 
-Run the domain, server, component, and accessibility coverage with `pnpm test`. That suite now includes a catalog contract check that verifies `supabase/functions/_shared/catalog-ids.ts` matches `packages/domain/src/catalog.ts`.
+## Testing
 
-If you edit the catalog, regenerate the shared edge-function IDs first:
+| Command | What it covers | Docker? |
+| --- | --- | --- |
+| `pnpm test` | build-env + catalog-sync scripts, domain, server, and desktop component/accessibility tests | no |
+| `pnpm typecheck:e2e` | type-checks the Playwright suite | no |
+| `pnpm exec playwright test` | two-client sync scenario through the real UI (hermetic — fake clients, tokens, and expiry clock) | no |
+| `pnpm check:functions`<br>`deno test --allow-env --allow-net supabase/functions/_shared/list-validation.test.ts supabase/functions/room-join/index.test.ts` | Edge Function validation and `room-join` | no |
+| `pnpm test:integration` | Supabase contract against a running local stack | yes |
 
-```powershell
-pnpm sync:catalog
-pnpm test:catalog-sync
-```
-
-Run the Edge Function integration check with `deno test --allow-env --allow-net supabase/functions/room-join/index.test.ts`.
-
-The browser scenario is hermetic—it provides two isolated clients, separate participant tokens, and a fake expiry clock, so it does not require Docker or a running Supabase instance:
+First-time Playwright setup:
 
 ```powershell
 pnpm exec playwright install chromium
+```
+
+The full pre-release gate (what the release workflow runs):
+
+```powershell
+pnpm test
 pnpm typecheck:e2e
 pnpm exec playwright test
 ```
 
-The scenario creates and joins a room through the real UI, updates player A's list, verifies player B receives the ordered partner list, disconnects both clients, and advances the server clock through the 15-minute expiry boundary.
+## Building
+
+Windows 10/11 with WebView2 is the only supported target. Building needs Rust and a
+populated `apps/desktop/.env.local` (or `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
+in the shell) — the build fails if the produced bundle is missing them.
+
+```powershell
+pnpm build                          # web assets only -> apps/desktop/dist
+pnpm --filter desktop tauri build   # MSI + NSIS installers
+```
+
+`tauri build` runs `pnpm build` first (`tsc -b`, `vite build`, then a check that the
+built artifact carries the Supabase config). Installers land in:
+
+```
+apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+```
+
+### CI
+
+- **CI** (`.github/workflows/ci.yml`) runs on every pull request and push to `main`:
+  the Linux test matrix above plus a Windows `tauri build` that uploads the installers
+  as an artifact.
+- **Windows release** (`.github/workflows/windows-release.yml`) runs the pre-release
+  gate and packages the installers for version tags (`v*`) or manual dispatch.
 
 ## Update the TFT catalog
 
-Edit `packages/domain/src/catalog.ts`. Keep stable lowercase IDs, preserve the explicit display order, and update the snapshot version, source URL, and filtering-rule comment above `CATALOG`. Then regenerate the edge-function contract and rerun the catalog tests:
+Edit `packages/domain/src/catalog.ts`. Keep stable lowercase IDs, preserve the explicit
+display order, and update the snapshot version, source URL, and filtering-rule comment
+above `CATALOG`. Catalog IDs are persisted in room lists, so renaming or removing an
+existing ID is a data-contract change, not a display-only edit.
+
+Regenerate the shared Edge Function ID list and re-run the affected tests:
 
 ```powershell
 pnpm sync:catalog
@@ -70,26 +139,14 @@ pnpm --filter @double-trouble/domain vitest run
 pnpm --filter desktop vitest run
 ```
 
-Catalog IDs are persisted in room lists, so renaming or removing an existing ID is a data-contract change rather than a display-only edit. The generator keeps the client and server ID lists in lockstep.
+## App icon
 
-## Windows overlay and release
-
-The supported release target is Windows 10/11 with WebView2. The app starts as a decorated room-entry window, then deliberately switches to a transparent, borderless, always-on-top window after joining a room. Browser development verifies the React flow but cannot certify native borderless positioning, DPI behavior, transparency, or always-on-top behavior; perform that smoke check on Windows before distributing an installer.
-
-Build the release installers on Windows:
-
-```powershell
-pnpm test
-pnpm exec playwright test
-pnpm --filter desktop tauri build
-```
-
-Tauri writes MSI and NSIS bundles below `apps/desktop/src-tauri/target/release/bundle/`. The `Windows release` workflow runs the same checks for version tags (`v*`) or manual dispatch and uploads both installer formats as a workflow artifact.
-
-The editable icon source is `apps/desktop/src-tauri/icons/app-icon.svg`. After changing it, regenerate the checked-in Tauri icon set from the repository root with:
+The editable source is `apps/desktop/src-tauri/icons/app-icon.svg`. After changing it,
+regenerate the checked-in icon set from the repository root:
 
 ```powershell
 pnpm --filter desktop tauri icon src-tauri/icons/app-icon.svg --output src-tauri/icons
 ```
 
-Keep the generated desktop files referenced by `bundle.icon` in `tauri.conf.json`; Windows packaging requires `icon.ico`.
+Keep the generated files referenced by `bundle.icon` in `tauri.conf.json`; Windows
+packaging requires `icon.ico`.
