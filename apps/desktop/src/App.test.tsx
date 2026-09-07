@@ -4,12 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import * as api from './features/room/room-api';
 
-const { connect, disconnect, retrySave, enterOverlayMode, setOverlayExpanded } = vi.hoisted(() => ({
+const { connect, disconnect, retrySave, enterOverlayMode, setOverlayExpanded, closeOverlay } = vi.hoisted(() => ({
   connect: vi.fn(),
   disconnect: vi.fn(),
   retrySave: vi.fn().mockResolvedValue(undefined),
   enterOverlayMode: vi.fn().mockResolvedValue(false),
   setOverlayExpanded: vi.fn().mockResolvedValue(undefined),
+  closeOverlay: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('./features/room/room-api', () => ({
@@ -41,6 +42,7 @@ vi.mock('./stores/room-store', () => {
 vi.mock('./lib/window-settings', () => ({
   enterOverlayMode,
   setOverlayExpanded,
+  closeOverlay,
   watchOverlayContent: () => () => undefined,
 }));
 
@@ -91,5 +93,23 @@ describe('App', () => {
 
     expect(setOverlayExpanded).toHaveBeenCalledWith(true);
     expect(await screen.findByRole('heading', { name: 'Editar prioridades' })).toBeInTheDocument();
+  });
+
+  it('confirms before leaving the room and closing the overlay', async () => {
+    vi.mocked(api.createRoom).mockResolvedValue({ roomId: 'room-uuid', participantToken: 'token' });
+
+    render(<App />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Criar sala' })[0]);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Fechar overlay' }));
+    expect(closeOverlay).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByText('Fechar overlay?')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar overlay' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    expect(disconnect).toHaveBeenCalled();
+    expect(closeOverlay).toHaveBeenCalledTimes(1);
   });
 });

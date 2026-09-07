@@ -14,16 +14,24 @@ const labels: Record<Category, string> = {
   component: 'componente',
 };
 
+const pluralLabels: Record<Category, string> = {
+  champion: 'campeões',
+  component: 'componentes',
+};
+
 export function CatalogPicker({ category, selectedIds, onAdd }: CatalogPickerProps) {
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
   const resultsId = useId();
   const atLimit = selectedIds.length >= 10;
   const categoryLabel = labels[category];
+  const showResults = open || query.trim().length > 0;
+
   const entries = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
-    return CATALOG.filter((entry) => entry.category === category).filter((entry) =>
-      entry.name.toLocaleLowerCase('pt-BR').includes(normalizedQuery),
-    );
+    return CATALOG.filter((entry) => entry.category === category)
+      .filter((entry) => entry.name.toLocaleLowerCase('pt-BR').includes(normalizedQuery))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   }, [category, query]);
 
   const add = (id: string) => {
@@ -34,7 +42,12 @@ export function CatalogPicker({ category, selectedIds, onAdd }: CatalogPickerPro
   };
 
   return (
-    <div className="catalog-picker grid gap-1.5">
+    <div
+      className="catalog-picker grid gap-1.5"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <label className="grid gap-1">
         <span className="font-display text-[10px] font-semibold tracking-[0.14em] text-ink-dim uppercase">
           Buscar {categoryLabel}
@@ -43,17 +56,24 @@ export function CatalogPicker({ category, selectedIds, onAdd }: CatalogPickerPro
           type="search"
           role="combobox"
           aria-autocomplete="list"
-          aria-expanded={query.length > 0}
+          aria-expanded={showResults}
           aria-controls={resultsId}
           aria-label={`Buscar ${categoryLabel}`}
           value={query}
           disabled={atLimit}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setOpen(false);
+              setQuery('');
+            }
+          }}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={atLimit ? 'Limite de 10 atingido' : `Digite o nome do ${categoryLabel}`}
+          placeholder={atLimit ? 'Limite de 10 atingido' : `Clique para ver todos os ${pluralLabels[category]}`}
           className="h-8 rounded-lg border border-edge bg-raise px-2.5 text-xs text-ink placeholder:text-ink-dim focus-visible:border-edge-strong disabled:opacity-50"
         />
       </label>
-      {query.length > 0 && (
+      {showResults && (
         <ScrollArea className="max-h-40 rounded-lg border border-edge bg-raise/60">
           <div
             id={resultsId}

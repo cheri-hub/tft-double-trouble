@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { CatalogEntry, PriorityLists } from '../../../../../packages/domain/src';
 import { Button } from '../../components/ui/button';
@@ -50,8 +50,14 @@ export function ExpandedOverlay({
 }: ExpandedOverlayProps) {
   const [draft, setDraft] = useState(() => copyLists(ownLists));
   const [tab, setTab] = useState<Tab>('champions');
+  const [confirmClear, setConfirmClear] = useState(false);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => setDraft(copyLists(ownLists)), [ownLists]);
+
+  useEffect(() => () => clearTimeout(confirmTimer.current), []);
+
+  const hasEntries = draft.champions.length > 0 || draft.components.length > 0;
 
   const update = (next: PriorityLists) => {
     setDraft(next);
@@ -70,6 +76,17 @@ export function ExpandedOverlay({
 
   const reorder = (category: Tab, ids: string[]) => {
     update({ ...draft, [category]: ids });
+  };
+
+  const clearAll = () => {
+    clearTimeout(confirmTimer.current);
+    if (!confirmClear) {
+      setConfirmClear(true);
+      confirmTimer.current = setTimeout(() => setConfirmClear(false), 3000);
+      return;
+    }
+    setConfirmClear(false);
+    update({ champions: [], components: [] });
   };
 
   return (
@@ -107,6 +124,20 @@ export function ExpandedOverlay({
           <span className="text-ink-dim">{SAVE_LABEL[saveStatus]}</span>
         )}
       </div>
+
+      {hasEntries && (
+        <div className="flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={confirmClear ? 'border-danger text-danger' : 'text-ink-dim'}
+            aria-label={confirmClear ? 'Confirmar limpeza de todas as prioridades' : 'Limpar todas as prioridades'}
+            onClick={clearAll}
+          >
+            {confirmClear ? 'Confirmar limpeza?' : 'Limpar tudo'}
+          </Button>
+        </div>
+      )}
 
       <ToggleGroup
         type="single"
