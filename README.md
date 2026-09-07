@@ -88,7 +88,8 @@ First-time Playwright setup:
 pnpm exec playwright install chromium
 ```
 
-The full pre-release gate (what the release workflow runs):
+Run this suite locally before opening a pull request — CI only checks that the app
+builds, it does not run the tests:
 
 ```powershell
 pnpm test
@@ -115,13 +116,26 @@ apps/desktop/src-tauri/target/release/bundle/msi/*.msi
 apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
 ```
 
-### CI
+## Releasing
 
-- **CI** (`.github/workflows/ci.yml`) runs on every pull request and push to `main`:
-  the Linux test matrix above plus a Windows `tauri build` that uploads the installers
-  as an artifact.
-- **Windows release** (`.github/workflows/windows-release.yml`) runs the pre-release
-  gate and packages the installers for version tags (`v*`) or manual dispatch.
+Tag a commit on `main` and push the tag:
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+`.github/workflows/release.yml` then builds on `windows-latest`, sets the app version
+from the tag (`v1.0.0` -> `1.0.0` in `tauri.conf.json` and `Cargo.toml`), and publishes
+a GitHub Release named `Double Trouble TFT v1.0.0` with auto-generated notes and both
+installers (`.msi` and `.exe`) attached.
+
+`.github/workflows/ci.yml` runs a Windows `tauri build` on every pull request and push
+to `main` so a broken build is caught before merge. Neither workflow runs the test
+suite — run it locally (see [Testing](#testing)).
+
+Both workflows need the repository secrets `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY`.
 
 ## Update the TFT catalog
 
